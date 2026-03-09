@@ -176,9 +176,11 @@ sub vcl_recv {
 # =============================================================================
 sub vcl_pipe {
     # Varnish vcl_pipe flushes the connection after the piped TUS session ends.
-    # Setting Connection: close prevents Varnish from reusing the backend
-    # connection for a different request after the pipe terminates.
-    set req.http.connection = "close";
+    # bereq.http.Connection controls the backend-side TCP connection header for
+    # piped requests.  Setting it to "close" prevents Varnish from reusing the
+    # backend connection for a different request after the pipe terminates.
+    # (req.http.Connection only affects the client side and has no effect here.)
+    set bereq.http.Connection = "close";
     return (pipe);
 }
 
@@ -208,7 +210,7 @@ sub vcl_backend_response {
     # to prevent a transient error from being served from cache for 10 minutes.
     # -------------------------------------------------------------------------
     if (beresp.http.Content-Type ~ "text/html") {
-        if (beresp.http.Cache-Control !~ "no-store|no-cache|private") {
+        if (beresp.http.Cache-Control !~ "(?i)no-store|no-cache|private") {
             if (beresp.status < 400) {
                 set beresp.ttl   = 10m;
                 set beresp.grace = 60s;
@@ -254,7 +256,7 @@ sub vcl_backend_response {
     # -------------------------------------------------------------------------
     # Never cache responses that explicitly opt out.
     # -------------------------------------------------------------------------
-    if (beresp.http.Cache-Control ~ "no-store|no-cache|private") {
+    if (beresp.http.Cache-Control ~ "(?i)no-store|no-cache|private") {
         set beresp.uncacheable = true;
         set beresp.ttl = 120s;
         return (deliver);
