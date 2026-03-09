@@ -241,3 +241,66 @@ assets path.  Varnish caches processed audio assets (`mp3`, `mp4`, `ogg`,
 `webm`, `wav`, `flac`, `aac`, `m4a`, `opus`) with a **30-day TTL** and
 `Vary: Accept` so clients that negotiate different container formats
 (e.g. `audio/ogg` vs `audio/mpeg`) receive the correct variant from cache.
+
+## Migration from Existing Configuration
+
+This section documents key differences from the previous `nginx.conf` /
+`conf.d/spx-bot-mitigation-logic.conf` setup to help ensure a smooth
+cut-over without hard-to-diagnose regressions.
+
+### Pre-migration checklist
+
+1. **Disable `conf.d/spx-bot-mitigation-logic.conf`** before activating the
+   new config.  The old file declares `geo` and `map` blocks for UA/bot
+   signals.  The new `nginx.conf` subsumes all of these maps at http scope.
+   Running both simultaneously will cause duplicate variable declaration
+   errors and prevent Nginx from starting.
+   ```bash
+   mv /etc/nginx/conf.d/spx-bot-mitigation-logic.conf \
+      /etc/nginx/conf.d/spx-bot-mitigation-logic.conf.bak
+   ```
+
+2. **Test config before reload**:
+   ```bash
+   nginx -t && nginx -s reload
+   ```
+
+3. **Update Fail2Ban filter regexes** — the log format name is unchanged
+   (`sparxstar_telemetry`), but the field structure within log lines has
+   changed.  Verify your Fail2Ban filters match the new field names:
+   - `real_ip="..."` — use this field for ban decisions (TCP-verified IP);
+     **previously logged as `CF-IP:...`** — filters must be updated to match
+     the new quoted-field syntax
+   - `cf_connecting_ip="..."` — raw CF header (informational only)
+   - `trace_id="..."` — new field; safe to ignore in Fail2Ban filters
+
+### Key differences from the previous config
+
+| Area | Previous config | New config | Notes |
+|------|----------------|------------|-------|
+| **Log format name** | `sparxstar_telemetry` | `sparxstar_telemetry` | Unchanged — zero Fail2Ban disruption |
+| **Trace ID** | `TraceID:$request_id` | `trace_id="$request_id"` | Same Nginx built-in variable; renamed field for log-parsing consistency; forwarded as `X-Request-ID` header to Varnish and Apache |
+| **`real_ip` log field** | `CF-IP:$http_cf_connecting_ip` (raw header, spoofable) | `real_ip="$remote_addr"` (TCP-restored, unspoofable) | **Fail2Ban rules must target `real_ip` not `CF-IP`** |
+| **GeoIP ASN logging** | `ASN:$geoip2_asn ORG:$geoip2_asn_org` (MaxMind) | Removed — uses `country="$http_cf_ipcountry"` | Eliminates MaxMind database dependency; Cloudflare provides country via header |
+| **`client_max_body_size`** | `500M` (global) | `10m` (global default); `0` for `/files/`, `1m` for `/graphql`, `64m` for `/submission` | Per-route limits are safer; TUS path still has no limit |
+| **TUS rate limiting** | `limit_conn_zone tus_conn` (concurrency) | Exempt — no rate limit on `/files/` | `/files/` is unconditionally exempt from both rate limiting and UA checks |
+| **Bot mitigation logic** | `conf.d/spx-bot-mitigation-logic.conf` | Inline in `nginx.conf` (`map` blocks) + `sites-available/system-core.conf` (`set`/`if` blocks) | Must disable old conf.d file before activating new config |
+| **Cloudflare-only gate** | Not present | `geo $realip_remote_addr $from_cloudflare` → `return 403` at server scope | New: blocks all non-Cloudflare direct-to-origin traffic using TCP connection IP |
+| **SPARXSTAR headers** | Not gated | `$pass_sparxstar_*` maps gated on `X-Worker-Origin-Secret` | New: header spoofing protection — headers only forwarded from verified CF Worker |
+
+### Log format field comparison
+
+Previous format:
+```
+$remote_addr ... CF-IP:$http_cf_connecting_ip Geo:$http_cf_ipcountry TraceID:$request_id BlockReason:$block_reason ASN:$geoip2_asn ORG:$geoip2_asn_org
+```
+
+New format:
+```
+$remote_addr ... real_ip="$remote_addr" cf_connecting_ip="$http_cf_connecting_ip" country="$http_cf_ipcountry" trace_id="$request_id" host="$host" block_reason="$block_reason"
+```
+
+The `$request_id` trace ID is also forwarded as `X-Request-ID` to all
+upstream services (Varnish, Apache, TUS Node), enabling end-to-end request
+correlation across all log files using a single ID.
+
