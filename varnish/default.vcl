@@ -12,8 +12,10 @@ vcl 4.1;
 import std;
 
 # -----------------------------------------------------------------------------
-# Backend — Apache + WordPress
+# Backends
 # -----------------------------------------------------------------------------
+
+# Apache + WordPress — primary backend for all cacheable/pass traffic.
 backend apache {
     .host = "127.0.0.1";
     .port = "8080";
@@ -21,12 +23,24 @@ backend apache {
     .first_byte_timeout = 120s;
     .between_bytes_timeout = 60s;
     .probe = {
+        # /health is a lightweight static endpoint in Apache that returns 200
+        # without invoking WordPress or PHP-FPM (see Apache config).
         .url       = "/health";
         .timeout   = 3s;
         .interval  = 10s;
         .window    = 5;
         .threshold = 3;
     }
+}
+
+# TUS Node server — dedicated backend for resumable upload paths.
+# /files/ traffic is piped directly to this backend to avoid body buffering.
+backend tus_node {
+    .host = "127.0.0.1";
+    .port = "1080";
+    .connect_timeout    = 5s;
+    .first_byte_timeout = 120s;
+    .between_bytes_timeout = 60s;
 }
 
 # =============================================================================
@@ -63,9 +77,13 @@ sub vcl_recv {
         return (pass);
     }
 
-    # TUS / Submission Core upload paths — pipe to avoid body buffering that
-    # could cause timeout or memory pressure on slow mobile connections.
+    # TUS / Submission Core upload paths — route to TUS Node backend and pipe
+    # to avoid any request-body buffering that would cause timeout or memory
+    # pressure on slow mobile connections.  Nginx handles /files/ → TUS
+    # directly in normal operation; this rule is belt-and-suspenders for any
+    # traffic that reaches Varnish via a different path.
     if (req.url ~ "(?i)^/files/") {
+        set req.backend_hint = tus_node;
         return (pipe);
     }
 
@@ -119,22 +137,20 @@ sub vcl_recv {
     }
 
     # -------------------------------------------------------------------------
-    # Strip geo-hash query parameters (?v=...) on authenticated routes to
-    # prevent cache key fragmentation while preserving session integrity.
+    # Normalise Accept header for WebP/AVIF image format negotiation.
+    # Only set for image requests — avoids fragmenting the HTML/text cache into
+    # avif/webp/default variants when the response does not actually vary.
+    # ⚠  The image extension regex below must stay in sync with the matching
+    #    patterns in vcl_backend_response (TTL and Vary rules).
     # -------------------------------------------------------------------------
-    if (req.url ~ "(\?|&)v=[^&]*") {
-        set req.url = regsuball(req.url, "(\?|&)v=[^&]*", "");
-    }
-
-    # -------------------------------------------------------------------------
-    # Normalise cache-varying Accept header for WebP/AVIF image negotiation.
-    # -------------------------------------------------------------------------
-    if (req.http.Accept ~ "image/avif") {
-        set req.http.X-Accept-Image = "avif";
-    } else if (req.http.Accept ~ "image/webp") {
-        set req.http.X-Accept-Image = "webp";
-    } else {
-        set req.http.X-Accept-Image = "default";
+    if (req.url ~ "\.(jpg|jpeg|png|gif|svg|ico|webp|avif)(\?.*)?$") {
+        if (req.http.Accept ~ "image/avif") {
+            set req.http.X-Accept-Image = "avif";
+        } else if (req.http.Accept ~ "image/webp") {
+            set req.http.X-Accept-Image = "webp";
+        } else {
+            set req.http.X-Accept-Image = "default";
+        }
     }
 
     return (hash);
@@ -173,11 +189,19 @@ sub vcl_backend_response {
     # -------------------------------------------------------------------------
     # Public HTML pages — 10-minute TTL with stale-while-revalidate grace
     # of 60 seconds so users never see a cache-miss stall.
+    # Only 2xx responses are eligible; error pages (4xx/5xx) get a short TTL
+    # to prevent a transient error from being served from cache for 10 minutes.
     # -------------------------------------------------------------------------
     if (beresp.http.Content-Type ~ "text/html") {
         if (beresp.http.Cache-Control !~ "no-store|no-cache|private") {
-            set beresp.ttl   = 10m;
-            set beresp.grace = 60s;
+            if (beresp.status < 400) {
+                set beresp.ttl   = 10m;
+                set beresp.grace = 60s;
+            } else {
+                # Short TTL for error pages — avoids persisting transient errors.
+                set beresp.ttl   = 5s;
+                set beresp.grace = 0s;
+            }
         }
     }
 
@@ -190,6 +214,8 @@ sub vcl_backend_response {
         unset beresp.http.Set-Cookie;
     }
 
+    # ⚠  The image extension regex below must stay in sync with the matching
+    #    pattern in vcl_recv (X-Accept-Image normalisation).
     if (bereq.url ~ "\.(jpg|jpeg|png|gif|svg|ico|webp|avif)(\?.*)?$") {
         set beresp.ttl   = 30d;
         set beresp.grace = 1d;
@@ -215,12 +241,16 @@ sub vcl_backend_response {
     }
 
     # -------------------------------------------------------------------------
-    # Mark responses with Vary: Accept for image format negotiation.
+    # Add Vary: Accept for image format negotiation (WebP/AVIF) — only on image
+    # responses.  Adding it globally would fragment the HTML/text/JS cache on
+    # the full Accept header value and destroy cache hit rates downstream.
     # -------------------------------------------------------------------------
-    if (beresp.http.Vary) {
-        set beresp.http.Vary = beresp.http.Vary + ", Accept";
-    } else {
-        set beresp.http.Vary = "Accept";
+    if (bereq.url ~ "\.(jpg|jpeg|png|gif|svg|ico|webp|avif)(\?.*)?$") {
+        if (beresp.http.Vary) {
+            set beresp.http.Vary = beresp.http.Vary + ", Accept";
+        } else {
+            set beresp.http.Vary = "Accept";
+        }
     }
 
     return (deliver);
