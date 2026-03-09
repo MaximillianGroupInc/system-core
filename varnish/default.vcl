@@ -241,9 +241,11 @@ sub vcl_backend_response {
     # Processed/served audio and video assets — long TTL.
     # These are already-transcoded files served to end-users; upload streams
     # (/files/) never reach this path (they are piped to tus_node in vcl_recv).
+    # Includes .weba (WebM Audio) which browsers may request instead of .mp3
+    # or .wav based on declared Accept capabilities or bandwidth.
     # ⚠  Extension list must stay in sync with the Vary: Accept rule below.
     # -------------------------------------------------------------------------
-    if (bereq.url ~ "\.(mp3|mp4|ogg|webm|wav|flac|aac|m4a|opus|mov|avi|mkv)(\?.*)?$") {
+    if (bereq.url ~ "\.(mp3|mp4|ogg|webm|weba|wav|flac|aac|m4a|opus|mov|avi|mkv)(\?.*)?$") {
         set beresp.ttl   = 30d;
         set beresp.grace = 1d;
         unset beresp.http.Set-Cookie;
@@ -273,11 +275,13 @@ sub vcl_backend_response {
     # cache on the full Accept header value and destroying hit rates.
     #
     # Images: browsers negotiate WebP/AVIF via Accept: image/avif, image/webp.
-    # Audio/Video: clients may negotiate codec containers via Accept header
-    # (e.g., audio/ogg vs audio/mpeg, video/webm vs video/mp4).
+    # Audio: clients negotiate containers via Accept (e.g., audio/webm [weba]
+    # vs audio/ogg vs audio/mpeg [mp3] vs audio/wav) based on codec support or
+    # bandwidth capability — each variant gets its own cache slot.
+    # Video: similar Accept-based negotiation for video/webm vs video/mp4.
     # ⚠  Extension list must stay in sync with the audio/video TTL rule above.
     # -------------------------------------------------------------------------
-    if (bereq.url ~ "\.(jpg|jpeg|png|gif|svg|ico|webp|avif|mp3|mp4|ogg|webm|wav|flac|aac|m4a|opus|mov|avi|mkv)(\?.*)?$") {
+    if (bereq.url ~ "\.(jpg|jpeg|png|gif|svg|ico|webp|avif|mp3|mp4|ogg|webm|weba|wav|flac|aac|m4a|opus|mov|avi|mkv)(\?.*)?$") {
         if (beresp.http.Vary) {
             set beresp.http.Vary = beresp.http.Vary + ", Accept";
         } else {
