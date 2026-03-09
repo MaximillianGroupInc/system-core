@@ -33,14 +33,23 @@ backend apache {
     }
 }
 
-# TUS Node server — dedicated backend for resumable upload paths.
-# /files/ traffic is piped directly to this backend to avoid body buffering.
+# TUS Node server — dedicated backend for large resumable audio/media uploads.
+# /files/ traffic is piped directly here to avoid body buffering, Varnish
+# memory pressure, and the default 60s pipe timeout that would kill long
+# uploads on slow mobile connections.
+#
+# Timeout rationale for large audio files:
+#   connect_timeout  — TUS Node is loopback-local; 5s is generous.
+#   first_byte_timeout — The TUS Node may need time before it acknowledges
+#       a large chunk; 300s gives headroom for slow mobile uplinks.
+#   between_bytes_timeout — Time between successive data chunks on the
+#       upload stream; 120s accommodates bursty African mobile connections.
 backend tus_node {
     .host = "127.0.0.1";
     .port = "1080";
-    .connect_timeout    = 5s;
-    .first_byte_timeout = 120s;
-    .between_bytes_timeout = 60s;
+    .connect_timeout       = 5s;
+    .first_byte_timeout    = 300s;
+    .between_bytes_timeout = 120s;
 }
 
 # =============================================================================
@@ -79,9 +88,15 @@ sub vcl_recv {
 
     # TUS / Submission Core upload paths — route to TUS Node backend and pipe
     # to avoid any request-body buffering that would cause timeout or memory
-    # pressure on slow mobile connections.  Nginx handles /files/ → TUS
-    # directly in normal operation; this rule is belt-and-suspenders for any
-    # traffic that reaches Varnish via a different path.
+    # pressure on slow mobile connections.
+    #
+    # These are large audio files (see README: "TUS Resumable Audio Upload"):
+    # Varnish must not buffer,
+    # queue, or cache any part of the upload stream.  Routing directly to the
+    # tus_node backend (port 1080) bypasses Apache entirely for this path.
+    # Nginx handles /files/ → TUS directly in normal operation; this rule is
+    # belt-and-suspenders for any traffic that reaches Varnish via a different
+    # path.
     if (req.url ~ "(?i)^/files/") {
         set req.backend_hint = tus_node;
         return (pipe);
@@ -223,6 +238,18 @@ sub vcl_backend_response {
     }
 
     # -------------------------------------------------------------------------
+    # Processed/served audio and video assets — long TTL.
+    # These are already-transcoded files served to end-users; upload streams
+    # (/files/) never reach this path (they are piped to tus_node in vcl_recv).
+    # ⚠  Extension list must stay in sync with the Vary: Accept rule below.
+    # -------------------------------------------------------------------------
+    if (bereq.url ~ "\.(mp3|mp4|ogg|webm|wav|flac|aac|m4a|opus|mov|avi|mkv)(\?.*)?$") {
+        set beresp.ttl   = 30d;
+        set beresp.grace = 1d;
+        unset beresp.http.Set-Cookie;
+    }
+
+    # -------------------------------------------------------------------------
     # Never cache responses that explicitly opt out.
     # -------------------------------------------------------------------------
     if (beresp.http.Cache-Control ~ "no-store|no-cache|private") {
@@ -241,11 +268,16 @@ sub vcl_backend_response {
     }
 
     # -------------------------------------------------------------------------
-    # Add Vary: Accept for image format negotiation (WebP/AVIF) — only on image
-    # responses.  Adding it globally would fragment the HTML/text/JS cache on
-    # the full Accept header value and destroy cache hit rates downstream.
+    # Add Vary: Accept for image and audio/video format negotiation.
+    # Only applied to media responses — avoids fragmenting the HTML/text/JS
+    # cache on the full Accept header value and destroying hit rates.
+    #
+    # Images: browsers negotiate WebP/AVIF via Accept: image/avif, image/webp.
+    # Audio/Video: clients may negotiate codec containers via Accept header
+    # (e.g., audio/ogg vs audio/mpeg, video/webm vs video/mp4).
+    # ⚠  Extension list must stay in sync with the audio/video TTL rule above.
     # -------------------------------------------------------------------------
-    if (bereq.url ~ "\.(jpg|jpeg|png|gif|svg|ico|webp|avif)(\?.*)?$") {
+    if (bereq.url ~ "\.(jpg|jpeg|png|gif|svg|ico|webp|avif|mp3|mp4|ogg|webm|wav|flac|aac|m4a|opus|mov|avi|mkv)(\?.*)?$") {
         if (beresp.http.Vary) {
             set beresp.http.Vary = beresp.http.Vary + ", Accept";
         } else {

@@ -27,8 +27,13 @@ INTERNET USERS
 ```
 
 Internal transport between layers uses loopback (`127.0.0.1`) only and is
-never exposed publicly.  TUS upload traffic is routed by Nginx directly to
-the TUS Node server (port 1080), bypassing Varnish entirely.
+never exposed publicly.
+
+**TUS audio upload path** — large audio files bypass Varnish entirely:
+Nginx terminates TUS connections and proxies directly to the TUS Node server
+(port 1080), with no buffering, no body size limit, and 3600s timeouts.
+Varnish also has a belt-and-suspenders `req.backend_hint = tus_node` rule
+for any `/files/` traffic that reaches it via a non-standard path.
 
 ## Configuration Files
 
@@ -155,3 +160,66 @@ are served from cache without cookie fragmentation.
 Nginx logs include `real_ip`, `country`, and `block_reason` fields.
 Fail2Ban rules must read `real_ip` (restored from `CF-Connecting-IP`),
 not `$remote_addr`, to avoid banning Cloudflare edge nodes.
+
+## TUS Resumable Audio Upload
+
+Large audio files are uploaded via the [TUS resumable upload protocol](https://tus.io/)
+at the `/files/` path.  Every layer in the pipeline is explicitly configured to
+give this traffic unobstructed, buffering-free passage.
+
+### Upload path
+
+```
+Browser / Mobile Client
+  → HTTPS POST/PATCH /files/  (TUS protocol)
+
+Cloudflare
+  → passes through; WAF rules must whitelist TUS methods (PATCH, HEAD, OPTIONS)
+
+Nginx (perimeter)
+  → location /files/  —  proxy_request_buffering off
+                          proxy_buffering off
+                          client_max_body_size 0  (no body size limit)
+                          proxy_read_timeout 3600s
+                          proxy_send_timeout 3600s
+  → proxies directly to TUS Node server (port 1080)
+  → UA checks and rate limiting are EXEMPT for /files/ (TUS clients send
+     minimal headers per TUS spec §1.5)
+
+Varnish (belt-and-suspenders)
+  → req.backend_hint = tus_node (port 1080)
+  → return(pipe)  — Varnish does NOT buffer or cache any part of the upload
+  → vcl_pipe sets Connection: close to prevent connection reuse after pipe ends
+  → TUS Node backend has extended timeouts (first_byte=300s,
+     between_bytes=120s) to accommodate large files on slow mobile links
+
+TUS Node server (port 1080)
+  → stores chunks, manages upload state, assembles final audio file
+  → Apache is never involved in the upload path
+```
+
+### Why pipe and not pass?
+
+Varnish `pass` still buffers the full request body before forwarding.
+`pipe` establishes a raw TCP tunnel between the client and the TUS Node,
+forwarding bytes without buffering — essential for large audio files that
+can exceed available Varnish memory and for TUS PATCH requests that must
+not be interrupted.
+
+### Timeout configuration
+
+| Layer | Setting | Value | Reason |
+|-------|---------|-------|--------|
+| Nginx | `proxy_read_timeout` | 3600s | Long-lived TUS sessions |
+| Nginx | `proxy_send_timeout` | 3600s | Slow mobile uplinks |
+| Nginx | `proxy_connect_timeout` | 75s | Loopback; 75s is generous |
+| Varnish `tus_node` | `first_byte_timeout` | 300s | TUS Node may delay ACK for large chunks |
+| Varnish `tus_node` | `between_bytes_timeout` | 120s | Bursty retry patterns on mobile |
+
+### Serving processed audio
+
+Once the TUS Node has assembled the audio file it is moved to the served
+assets path.  Varnish caches processed audio assets (`mp3`, `mp4`, `ogg`,
+`webm`, `wav`, `flac`, `aac`, `m4a`, `opus`) with a **30-day TTL** and
+`Vary: Accept` so clients that negotiate different container formats
+(e.g. `audio/ogg` vs `audio/mpeg`) receive the correct variant from cache.
