@@ -176,8 +176,12 @@ are served from cache without cookie fragmentation.
 ### Fail2Ban integration
 
 Nginx logs include `real_ip`, `country`, and `block_reason` fields.
-Fail2Ban rules must read `real_ip` (restored from `CF-Connecting-IP`),
-not `$remote_addr`, to avoid banning Cloudflare edge nodes.
+Fail2Ban rules must read the `real_ip` field, which holds `$remote_addr` —
+the client IP reconstructed from `CF-Connecting-IP` by Nginx's
+`real_ip_header` + `set_real_ip_from` processing.  Do **not** write Fail2Ban
+rules against the raw `cf_connecting_ip` field (the unverified request header)
+or any leading IP in the common log field, which for Cloudflare-proxied traffic
+would be a Cloudflare edge node address rather than the visitor's IP.
 
 ## TUS Resumable Audio Upload
 

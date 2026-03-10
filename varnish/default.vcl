@@ -137,9 +137,8 @@ sub vcl_recv {
     #     be served from cache (anonymous public page).
     #   • Session/auth cookies present → pass to origin; do not cache.
     #
-    # Both URL match and cookie regex are case-insensitive ((?i) prefix) —
-    # some WordPress proxies normalise cookie names inconsistently.
-    # [^;]* (not [^;]+) handles empty-value cookie segments correctly.
+    # The cookie regex uses (?i) (case-insensitive) and matches cookie name
+    # prefixes as substrings within the Cookie header value.
     # -------------------------------------------------------------------------
     if (req.http.Cookie) {
         if (req.http.Cookie !~ "(?i)(wordpress_logged_in_|wp-postpass_|woocommerce_items_in_cart|wp_woocommerce_session_|SCF_)") {
@@ -206,12 +205,13 @@ sub vcl_backend_response {
     # -------------------------------------------------------------------------
     # Public HTML pages — 10-minute TTL with stale-while-revalidate grace
     # of 60 seconds so users never see a cache-miss stall.
-    # Only 2xx responses are eligible; error pages (4xx/5xx) get a short TTL
-    # to prevent a transient error from being served from cache for 10 minutes.
+    # Only 2xx responses are eligible; 3xx redirects (which may be temporary)
+    # and error pages (4xx/5xx) get a short TTL to prevent stale redirect
+    # targets or transient errors from being served from cache for 10 minutes.
     # -------------------------------------------------------------------------
     if (beresp.http.Content-Type ~ "text/html") {
         if (beresp.http.Cache-Control !~ "(?i)no-store|no-cache|private") {
-            if (beresp.status < 400) {
+            if (beresp.status >= 200 && beresp.status < 300) {
                 set beresp.ttl   = 10m;
                 set beresp.grace = 60s;
             } else {
