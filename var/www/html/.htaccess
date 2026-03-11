@@ -1,0 +1,48 @@
+######################################################################
+# Starisian Technology - WordPress Multisite Backend Config
+# Optimized for: Cloudflare -> Nginx -> Varnish -> Apache2
+######################################################################
+
+# 1. FIX THE REDIRECT LOOP (Critical for Varnish/Nginx)
+# This tells WordPress that the request is HTTPS even though Varnish talks to Apache via HTTP
+SetEnvIf X-Forwarded-Proto "https" HTTPS=on
+
+# 2. SECURITY BASICS
+ServerSignature Off
+Options +FollowSymLinks -Indexes
+Options -ExecCGI
+
+    # -------------------------------------------------------------------------
+    # mod_rewrite — WordPress multisite subdirectory / subdomain rewrites.
+    # Mercator SUNRISE requires standard WordPress multisite rewrites to be in
+    # place before the sunrise.php drop-in is invoked.
+    # -------------------------------------------------------------------------
+    <IfModule mod_rewrite.c>
+        RewriteEngine On
+        RewriteBase   /
+        RewriteRule ^index\.php$ - [L]
+
+        # Add a trailing slash to /wp-admin
+        RewriteRule ^wp-admin$ wp-admin/ [R=301,L]
+
+        # Allow direct access to existing files and directories.
+        RewriteCond %{REQUEST_FILENAME} -f [OR]
+        RewriteCond %{REQUEST_FILENAME} -d
+        RewriteRule ^ - [L]
+
+        # Health check — let it pass to the static file handler defined above;
+        # must appear before the WordPress PHP and index.php catch-all rules.
+        RewriteRule ^health$ - [L]
+
+        # WordPress multisite — subdirectory network (adjust for subdomain if needed).
+        RewriteRule ^(wp-(content|admin|includes).*) $1 [L]
+        RewriteRule ^(.*\.php)$                      $1 [L]
+
+        # Route all other requests to WordPress index.php.
+        RewriteRule . /index.php [L]
+    </IfModule>
+
+# 4. PREVENT DIRECT ACCESS TO SENSITIVE FILES
+<FilesMatch "^(wp-config\.php|\.htaccess|\.htpasswd|debug\.log|\.env)$">
+    Require all denied
+</FilesMatch>
