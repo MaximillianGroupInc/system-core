@@ -71,13 +71,18 @@ sub vcl_recv {
     # Bypass routes — these paths must never be served from cache.
     # -------------------------------------------------------------------------
 
-    # WordPress admin and login — always bypass.
-    if (req.url ~ "(?i)^/wp-(admin|login\.php)") {
+    # WordPress admin and all wp-*.php files — always bypass.
+    if (req.url ~ "(?i)^/(wp-admin|wp-[^/]*\.php)") {
         return (pass);
     }
 
     # STAR dashboards — authenticated member surfaces.
     if (req.url ~ "(?i)^/star-") {
+        return (pass);
+    }
+
+    # WooCommerce cart — authenticated session surface.
+    if (req.url ~ "(?i)^/cart(/|$|\?)") {
         return (pass);
     }
 
@@ -107,13 +112,13 @@ sub vcl_recv {
         return (pass);
     }
 
-    # WordPress cron — never cache.
-    if (req.url ~ "(?i)^/wp-cron\.php") {
+    # index.php and xmlrpc.php — pass (Nginx blocks xmlrpc; belt-and-suspenders).
+    if (req.url ~ "(?i)^/(index|xmlrpc)\.php") {
         return (pass);
     }
 
-    # xmlrpc — pass (Nginx blocks this; belt-and-suspenders).
-    if (req.url ~ "(?i)^/xmlrpc\.php") {
+    # Sitemaps — bypass; never cache dynamic XML sitemaps.
+    if (req.url ~ "(?i)^/sitemap[^/.]*\.xml") {
         return (pass);
     }
 
@@ -129,7 +134,8 @@ sub vcl_recv {
     # Cookie allowlist — enforced on all non-bypassed requests.
     #
     # At this point in vcl_recv, all bypass routes have already returned:
-    # /wp-admin, /wp-login.php, /star-*, /graphql, /files/, /submission.
+    # /wp-admin, /wp-*.php, /star-*, /cart, /graphql, /files/, /submission,
+    # /index.php, /xmlrpc.php, /sitemap*.xml.
     # Only public-facing routes remain.
     #
     # Logic:
@@ -141,7 +147,7 @@ sub vcl_recv {
     # prefixes as substrings within the Cookie header value.
     # -------------------------------------------------------------------------
     if (req.http.Cookie) {
-        if (req.http.Cookie !~ "(?i)(wordpress_logged_in_|wp-postpass_|woocommerce_items_in_cart|wp_woocommerce_session_|SCF_)") {
+        if (req.http.Cookie !~ "(?i)(wp_logged_in|wordpress_logged_in_|wp-postpass_|woocommerce_cart_hash|woocommerce_items_in_cart|wp_woocommerce_session_|woocommerce_recently_viewed|store_notice|SCF_)") {
             # No recognised session cookie — strip and allow cache lookup.
             unset req.http.Cookie;
         } else {

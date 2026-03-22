@@ -163,10 +163,14 @@ Before enabling `includeSubDomains`:
 
 Authenticated sessions are identified by any of the following cookies:
 
+- `wp_logged_in`
 - `wordpress_logged_in_*`
 - `wp-postpass_*`
+- `woocommerce_cart_hash`
 - `woocommerce_items_in_cart*`
 - `wp_woocommerce_session_*`
+- `woocommerce_recently_viewed`
+- `store_notice*` (e.g. `store_notice[noticeid]`)
 - `SCF_*`
 
 Requests carrying these cookies bypass the cache entirely (Varnish `pass`).
