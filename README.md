@@ -242,13 +242,18 @@ not be interrupted.
 | Varnish `tus_node` | `first_byte_timeout` | 300s | TUS Node may delay ACK for large chunks |
 | Varnish `tus_node` | `between_bytes_timeout` | 120s | Bursty retry patterns on mobile |
 
-### Serving processed audio
+### Serving processed audio and video
 
 Once the TUS Node has assembled the audio file it is moved to the served
-assets path.  Varnish caches processed audio assets (`mp3`, `mp4`, `ogg`,
-`webm`, `wav`, `flac`, `aac`, `m4a`, `opus`) with a **30-day TTL** and
-`Vary: Accept` so clients that negotiate different container formats
-(e.g. `audio/ogg` vs `audio/mpeg`) receive the correct variant from cache.
+assets path.  Varnish caches processed audio and video assets with a
+**30-day TTL** and `Vary: Accept` so clients that negotiate different
+container formats receive the correct variant from cache.
+
+| Asset type | Extensions |
+|---|---|
+| Audio | `mp3`, `ogg`, `weba`, `wav`, `flac`, `aac`, `m4a`, `opus` |
+| Video | `mp4`, `webm`, `mov`, `avi`, `mkv`, `m4v`, `mpeg`, `mpg`, `flv`, `wmv` |
+| Documents | `pdf`, `doc`, `docx`, `ppt`, `pptx`, `xls`, `xlsx` |
 
 ## Migration from Existing Configuration
 

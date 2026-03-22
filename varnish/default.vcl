@@ -251,9 +251,22 @@ sub vcl_backend_response {
     # (/files/) never reach this path (they are piped to tus_node in vcl_recv).
     # Includes .weba (WebM Audio) which browsers may request instead of .mp3
     # or .wav based on declared Accept capabilities or bandwidth.
+    # Also covers legacy container formats (flv, wmv, m4v, mpeg/mpg) for
+    # compatibility with older content in the media library.
     # ⚠  Extension list must stay in sync with the Vary: Accept rule below.
     # -------------------------------------------------------------------------
-    if (bereq.url ~ "\.(mp3|mp4|ogg|webm|weba|wav|flac|aac|m4a|opus|mov|avi|mkv)(\?.*)?$") {
+    if (bereq.url ~ "\.(mp3|mp4|mpeg|mpg|ogg|webm|weba|wav|flac|aac|m4a|m4v|opus|mov|avi|mkv|flv|wmv)(\?.*)?$") {
+        set beresp.ttl   = 30d;
+        set beresp.grace = 1d;
+        unset beresp.http.Set-Cookie;
+    }
+
+    # -------------------------------------------------------------------------
+    # Document and presentation assets — long TTL; static by nature.
+    # PDFs, Word documents, and PowerPoint files are versioned by filename
+    # in WordPress media library uploads and are safe to cache long-term.
+    # -------------------------------------------------------------------------
+    if (bereq.url ~ "\.(pdf|doc|docx|ppt|pptx|xls|xlsx)(\?.*)?$") {
         set beresp.ttl   = 30d;
         set beresp.grace = 1d;
         unset beresp.http.Set-Cookie;
@@ -289,7 +302,7 @@ sub vcl_backend_response {
     # Video: similar Accept-based negotiation for video/webm vs video/mp4.
     # ⚠  Extension list must stay in sync with the audio/video TTL rule above.
     # -------------------------------------------------------------------------
-    if (bereq.url ~ "\.(jpg|jpeg|png|gif|svg|ico|webp|avif|mp3|mp4|ogg|webm|weba|wav|flac|aac|m4a|opus|mov|avi|mkv)(\?.*)?$") {
+    if (bereq.url ~ "\.(jpg|jpeg|png|gif|svg|ico|webp|avif|mp3|mp4|mpeg|mpg|ogg|webm|weba|wav|flac|aac|m4a|m4v|opus|mov|avi|mkv|flv|wmv)(\?.*)?$") {
         if (beresp.http.Vary) {
             set beresp.http.Vary = beresp.http.Vary + ", Accept";
         } else {
