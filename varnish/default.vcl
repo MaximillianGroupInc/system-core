@@ -72,7 +72,7 @@ sub vcl_recv {
     # -------------------------------------------------------------------------
 
     # WordPress admin and all wp-*.php files — always bypass.
-    if (req.url ~ "(?i)^/(wp-admin|wp-[^/]*\.php)") {
+    if (req.url ~ "(?i)^/(wp-admin(?:/|$|\?)|wp-[^/]*\.php(?:$|\?))") {
         return (pass);
     }
 
