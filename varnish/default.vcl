@@ -71,13 +71,18 @@ sub vcl_recv {
     # Bypass routes — these paths must never be served from cache.
     # -------------------------------------------------------------------------
 
-    # WordPress admin and login — always bypass.
-    if (req.url ~ "(?i)^/wp-(admin|login\.php)") {
+    # WordPress admin and all wp-*.php files — always bypass.
+    if (req.url ~ "(?i)^/(wp-admin(?:/|$|\?)|wp-[^/]*\.php(?:$|\?))") {
         return (pass);
     }
 
     # STAR dashboards — authenticated member surfaces.
     if (req.url ~ "(?i)^/star-") {
+        return (pass);
+    }
+
+    # WooCommerce cart — authenticated session surface.
+    if (req.url ~ "(?i)^/cart(/|$|\?)") {
         return (pass);
     }
 
@@ -107,13 +112,13 @@ sub vcl_recv {
         return (pass);
     }
 
-    # WordPress cron — never cache.
-    if (req.url ~ "(?i)^/wp-cron\.php") {
+    # index.php and xmlrpc.php — pass (Nginx blocks xmlrpc; belt-and-suspenders).
+    if (req.url ~ "(?i)^/(index|xmlrpc)\.php") {
         return (pass);
     }
 
-    # xmlrpc — pass (Nginx blocks this; belt-and-suspenders).
-    if (req.url ~ "(?i)^/xmlrpc\.php") {
+    # Sitemaps — bypass; never cache dynamic XML sitemaps.
+    if (req.url ~ "(?i)^/sitemap[^/.]*\.xml") {
         return (pass);
     }
 
@@ -129,7 +134,8 @@ sub vcl_recv {
     # Cookie allowlist — enforced on all non-bypassed requests.
     #
     # At this point in vcl_recv, all bypass routes have already returned:
-    # /wp-admin, /wp-login.php, /star-*, /graphql, /files/, /submission.
+    # /wp-admin, /wp-*.php, /star-*, /cart, /graphql, /files/, /submission,
+    # /index.php, /xmlrpc.php, /sitemap*.xml.
     # Only public-facing routes remain.
     #
     # Logic:
@@ -141,7 +147,7 @@ sub vcl_recv {
     # prefixes as substrings within the Cookie header value.
     # -------------------------------------------------------------------------
     if (req.http.Cookie) {
-        if (req.http.Cookie !~ "(?i)(wordpress_logged_in_|wp-postpass_|woocommerce_items_in_cart|wp_woocommerce_session_|SCF_)") {
+        if (req.http.Cookie !~ "(?i)(wp_logged_in|wordpress_logged_in_|wp-postpass_|woocommerce_cart_hash|woocommerce_items_in_cart|wp_woocommerce_session_|woocommerce_recently_viewed|store_notice|SCF_)") {
             # No recognised session cookie — strip and allow cache lookup.
             unset req.http.Cookie;
         } else {
@@ -245,9 +251,22 @@ sub vcl_backend_response {
     # (/files/) never reach this path (they are piped to tus_node in vcl_recv).
     # Includes .weba (WebM Audio) which browsers may request instead of .mp3
     # or .wav based on declared Accept capabilities or bandwidth.
+    # Also covers legacy container formats (flv, wmv, m4v, mpeg/mpg) for
+    # compatibility with older content in the media library.
     # ⚠  Extension list must stay in sync with the Vary: Accept rule below.
     # -------------------------------------------------------------------------
-    if (bereq.url ~ "\.(mp3|mp4|ogg|webm|weba|wav|flac|aac|m4a|opus|mov|avi|mkv)(\?.*)?$") {
+    if (bereq.url ~ "\.(mp3|mp4|mpeg|mpg|ogg|webm|weba|wav|flac|aac|m4a|m4v|opus|mov|avi|mkv|flv|wmv)(\?.*)?$") {
+        set beresp.ttl   = 30d;
+        set beresp.grace = 1d;
+        unset beresp.http.Set-Cookie;
+    }
+
+    # -------------------------------------------------------------------------
+    # Document, spreadsheet, and presentation assets — long TTL; static by nature.
+    # PDFs, Word documents, Excel spreadsheets, and PowerPoint files are versioned
+    # by filename in WordPress media library uploads and are safe to cache long-term.
+    # -------------------------------------------------------------------------
+    if (bereq.url ~ "\.(pdf|doc|docx|ppt|pptx|xls|xlsx)(\?.*)?$") {
         set beresp.ttl   = 30d;
         set beresp.grace = 1d;
         unset beresp.http.Set-Cookie;
@@ -283,7 +302,7 @@ sub vcl_backend_response {
     # Video: similar Accept-based negotiation for video/webm vs video/mp4.
     # ⚠  Extension list must stay in sync with the audio/video TTL rule above.
     # -------------------------------------------------------------------------
-    if (bereq.url ~ "\.(jpg|jpeg|png|gif|svg|ico|webp|avif|mp3|mp4|ogg|webm|weba|wav|flac|aac|m4a|opus|mov|avi|mkv)(\?.*)?$") {
+    if (bereq.url ~ "\.(jpg|jpeg|png|gif|svg|ico|webp|avif|mp3|mp4|mpeg|mpg|ogg|webm|weba|wav|flac|aac|m4a|m4v|opus|mov|avi|mkv|flv|wmv)(\?.*)?$") {
         if (beresp.http.Vary) {
             set beresp.http.Vary = beresp.http.Vary + ", Accept";
         } else {

@@ -163,10 +163,14 @@ Before enabling `includeSubDomains`:
 
 Authenticated sessions are identified by any of the following cookies:
 
+- `wp_logged_in`
 - `wordpress_logged_in_*`
 - `wp-postpass_*`
+- `woocommerce_cart_hash`
 - `woocommerce_items_in_cart*`
 - `wp_woocommerce_session_*`
+- `woocommerce_recently_viewed`
+- `store_notice*` (e.g. `store_notice[noticeid]`)
 - `SCF_*`
 
 Requests carrying these cookies bypass the cache entirely (Varnish `pass`).
@@ -238,13 +242,27 @@ not be interrupted.
 | Varnish `tus_node` | `first_byte_timeout` | 300s | TUS Node may delay ACK for large chunks |
 | Varnish `tus_node` | `between_bytes_timeout` | 120s | Bursty retry patterns on mobile |
 
-### Serving processed audio
+### Serving processed audio and video
 
 Once the TUS Node has assembled the audio file it is moved to the served
-assets path.  Varnish caches processed audio assets (`mp3`, `mp4`, `ogg`,
-`webm`, `wav`, `flac`, `aac`, `m4a`, `opus`) with a **30-day TTL** and
-`Vary: Accept` so clients that negotiate different container formats
-(e.g. `audio/ogg` vs `audio/mpeg`) receive the correct variant from cache.
+assets path.  Varnish caches processed audio and video assets with a
+**30-day TTL** and `Vary: Accept` so clients that negotiate different
+container formats receive the correct variant from cache.
+
+| Asset type | Extensions |
+|---|---|
+| Audio | `mp3`, `ogg`, `weba`, `wav`, `flac`, `aac`, `m4a`, `opus` |
+| Video | `mp4`, `webm`, `mov`, `avi`, `mkv`, `m4v`, `mpeg`, `mpg`, `flv`, `wmv` |
+
+### Serving static documents
+
+Static document assets are also served from the assets path and cached by
+Varnish with the same **30-day TTL**, but they do **not** use `Vary: Accept`
+because there is no content-negotiated variant for these types.
+
+| Asset type | Extensions |
+|---|---|
+| Documents | `pdf`, `doc`, `docx`, `ppt`, `pptx`, `xls`, `xlsx` |
 
 ## Migration from Existing Configuration
 
