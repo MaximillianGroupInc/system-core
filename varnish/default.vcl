@@ -262,9 +262,9 @@ sub vcl_backend_response {
     }
 
     # -------------------------------------------------------------------------
-    # Document and presentation assets — long TTL; static by nature.
-    # PDFs, Word documents, and PowerPoint files are versioned by filename
-    # in WordPress media library uploads and are safe to cache long-term.
+    # Document, spreadsheet, and presentation assets — long TTL; static by nature.
+    # PDFs, Word documents, Excel spreadsheets, and PowerPoint files are versioned
+    # by filename in WordPress media library uploads and are safe to cache long-term.
     # -------------------------------------------------------------------------
     if (bereq.url ~ "\.(pdf|doc|docx|ppt|pptx|xls|xlsx)(\?.*)?$") {
         set beresp.ttl   = 30d;
