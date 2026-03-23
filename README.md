@@ -253,6 +253,15 @@ container formats receive the correct variant from cache.
 |---|---|
 | Audio | `mp3`, `ogg`, `weba`, `wav`, `flac`, `aac`, `m4a`, `opus` |
 | Video | `mp4`, `webm`, `mov`, `avi`, `mkv`, `m4v`, `mpeg`, `mpg`, `flv`, `wmv` |
+
+### Serving static documents
+
+Static document assets are also served from the assets path and cached by
+Varnish with the same **30-day TTL**, but they do **not** use `Vary: Accept`
+because there is no content-negotiated variant for these types.
+
+| Asset type | Extensions |
+|---|---|
 | Documents | `pdf`, `doc`, `docx`, `ppt`, `pptx`, `xls`, `xlsx` |
 
 ## Migration from Existing Configuration
