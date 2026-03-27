@@ -87,7 +87,7 @@ sub vcl_recv {
     }
 
     # GraphQL — cache on GET.
-    if (req.method == "GET" && req.url ~ "^/graphql") {
+    if (req.url ~ "^/graphql") {
         unset req.http.Cookie;
         return (hash);
     }
@@ -203,7 +203,7 @@ sub vcl_hash {
     }
 
     # add hash for graphql caching
-    if (req.url ~ "^/graphql" && req.method == "POST") {
+    if (req.url ~ "^/graphql") {
         if (req.http.x-graphql-query-id) {
             hash_data(req.http.x-graphql-query-id);
         }
@@ -216,6 +216,16 @@ sub vcl_hash {
 # vcl_backend_response — set TTLs and grace periods
 # =============================================================================
 sub vcl_backend_response {
+
+    # -------------------------------------------------------------------------
+    # GraphQL JSON — cache it
+    # -------------------------------------------------------------------------
+    if (bereq.url ~ "^/graphql") {
+        set beresp.ttl = 1h;
+        set beresp.grace = 5m;
+        unset beresp.http.Set-Cookie;
+   }
+
     # -------------------------------------------------------------------------
     # Public HTML pages — 10-minute TTL with stale-while-revalidate grace
     # of 60 seconds so users never see a cache-miss stall.
