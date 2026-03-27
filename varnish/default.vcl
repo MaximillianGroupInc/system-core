@@ -86,11 +86,12 @@ sub vcl_recv {
         return (pass);
     }
 
-    # GraphQL — never cache; rate-limited and persisted-query controlled.
-    if (req.url ~ "(?i)^/graphql") {
-        return (pass);
+    # GraphQL — cache on GET.
+    if (req.method == "GET" && req.url ~ "^/graphql") {
+        unset req.http.Cookie;
+        return (hash);
     }
-
+    
     # TUS / Submission Core upload paths — route to TUS Node backend and pipe
     # to avoid any request-body buffering that would cause timeout or memory
     # pressure on slow mobile connections.
@@ -199,6 +200,13 @@ sub vcl_hash {
     # Include image format negotiation in the cache key.
     if (req.http.X-Accept-Image) {
         hash_data(req.http.X-Accept-Image);
+    }
+
+    # add hash for graphql caching
+    if (req.url ~ "^/graphql" && req.method == "POST") {
+        if (req.http.x-graphql-query-id) {
+            hash_data(req.http.x-graphql-query-id);
+        }
     }
 
     return (lookup);
