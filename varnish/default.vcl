@@ -218,13 +218,16 @@ sub vcl_hash {
 sub vcl_backend_response {
 
     # -------------------------------------------------------------------------
-    # GraphQL JSON — cache it
+    # GraphQL JSON — cache it (only for cacheable 200 JSON responses)
     # -------------------------------------------------------------------------
-    if (bereq.url ~ "^/graphql") {
+    if (bereq.url ~ "^/graphql" &&
+        beresp.status == 200 &&
+        beresp.http.Content-Type ~ "application/json" &&
+        beresp.http.Cache-Control !~ "(?i)no-store|no-cache|private") {
         set beresp.ttl = 1h;
         set beresp.grace = 5m;
         unset beresp.http.Set-Cookie;
-   }
+    }
 
     # -------------------------------------------------------------------------
     # Public HTML pages — 10-minute TTL with stale-while-revalidate grace
