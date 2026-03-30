@@ -226,9 +226,14 @@ sub vcl_backend_response {
         beresp.http.Cache-Control !~ "(?i)no-store|no-cache|private") {
         set beresp.ttl = 1h;
         set beresp.grace = 5m;
-        unset beresp.http.Set-Cookie;
-    }
 
+        # If the backend sets cookies (e.g., auth/CSRF flows), do not cache
+        # this response but still pass Set-Cookie through to the client.
+        if (beresp.http.Set-Cookie) {
+            set beresp.uncacheable = true;
+            set beresp.ttl = 0s;
+        }
+    }
     # -------------------------------------------------------------------------
     # Public HTML pages — 10-minute TTL with stale-while-revalidate grace
     # of 60 seconds so users never see a cache-miss stall.
