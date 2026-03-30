@@ -238,12 +238,20 @@ sub vcl_hash {
 sub vcl_backend_response {
 
     # -------------------------------------------------------------------------
-    # GraphQL JSON — cache it (only for cacheable 200 JSON responses)
+    # GraphQL JSON — cache it (only for anonymous, cacheable 200 JSON responses)
+    #
+    # Gated on both response signals (status, Content-Type, Cache-Control) and
+    # request auth signals (Authorization, X-WP-Nonce, session cookies) so
+    # that authenticated or personalized responses are never stored in cache,
+    # even if vcl_recv somehow passed them to origin.
     # -------------------------------------------------------------------------
     if (bereq.url ~ "^/graphql" &&
         beresp.status == 200 &&
         beresp.http.Content-Type ~ "application/json" &&
-        beresp.http.Cache-Control !~ "(?i)no-store|no-cache|private") {
+        beresp.http.Cache-Control !~ "(?i)no-store|no-cache|private" &&
+        !bereq.http.Authorization &&
+        !bereq.http.X-WP-Nonce &&
+        bereq.http.Cookie !~ "(?i)(wp_logged_in|wordpress_logged_in_|wp-postpass_|woocommerce_cart_hash|woocommerce_items_in_cart|wp_woocommerce_session_|SCF_)") {
         set beresp.ttl = 1h;
         set beresp.grace = 5m;
 
