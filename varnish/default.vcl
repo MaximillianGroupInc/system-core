@@ -87,7 +87,7 @@ sub vcl_recv {
     }
 
     # GraphQL — POST-only endpoint; cache only fully-anonymous requests.
-    #
+    if (req.method == "GET" && req.url ~ "^/graphql") {
     # The GraphQL endpoint accepts POST only (GET is blocked at the Nginx and
     # Apache layers for data-leakage reasons — see nginx Section 12.1 and
     # apache/sites-available/system-core.conf).
