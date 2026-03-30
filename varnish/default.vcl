@@ -259,13 +259,6 @@ sub vcl_backend_response {
         bereq.http.Cookie !~ "(?i)(wp_logged_in|wordpress_logged_in_|wp-postpass_|woocommerce_cart_hash|woocommerce_items_in_cart|wp_woocommerce_session_|SCF_)") {
         set beresp.ttl = 1h;
         set beresp.grace = 5m;
-
-        # If the backend sets cookies (e.g., auth/CSRF flows), do not cache
-        # this response but still pass Set-Cookie through to the client.
-        if (beresp.http.Set-Cookie) {
-            set beresp.uncacheable = true;
-            set beresp.ttl = 0s;
-        }
     }
     # -------------------------------------------------------------------------
     # Public HTML pages — 10-minute TTL with stale-while-revalidate grace
