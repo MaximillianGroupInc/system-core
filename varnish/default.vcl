@@ -86,8 +86,28 @@ sub vcl_recv {
         return (pass);
     }
 
-    # GraphQL — cache on GET.
+    # GraphQL — cache anonymous GET requests only. Nginx allows GET/HEAD to
+    # /graphql (via limit_except POST GET HEAD), and Apache now also permits
+    # GET/HEAD so that Varnish can populate its cache on a miss.
+    #
+    # WP GraphQL's GET-based persistent-query caching issues GET requests; the
+    # data served here is a static public dictionary (words + definitions) that
+    # is never user-specific, so anonymous GET responses are safe to cache.
+    # POST and other methods fall through to the "Only cache GET/HEAD" guard
+    # below, which passes them to origin uncached.
+    #
+    # Auth signals checked (any → pass to origin, never cache):
+    #   - Authorization header  (Bearer/Basic tokens, JWT, etc.)
+    #   - X-WP-Nonce header     (WordPress nonce — user-scoped)
+    #   - Known session/auth and UX-affecting cookies (aligned with the
+    #     general cookie allowlist; extend alongside it as needed, plus SCF_
+    #     for Submission Core).
     if (req.method == "GET" && req.url ~ "^/graphql") {
+        if (req.http.Authorization ||
+            req.http.X-WP-Nonce ||
+            req.http.Cookie ~ "(?i)(wp_logged_in|wordpress_logged_in_|wp-postpass_|woocommerce_cart_hash|woocommerce_items_in_cart|wp_woocommerce_session_|woocommerce_recently_viewed|store_notice|SCF_)") {
+            return (pass);
+        }
         unset req.http.Cookie;
         return (hash);
     }
@@ -135,9 +155,12 @@ sub vcl_recv {
     # Cookie allowlist — enforced on all non-bypassed requests.
     #
     # At this point in vcl_recv, all bypass routes have already returned:
-    # /wp-admin, /wp-*.php, /star-*, /cart, /graphql, /files/, /submission,
+    # /wp-admin, /wp-*.php, /star-*, /cart, /files/, /submission,
     # /index.php, /xmlrpc.php, /sitemap*.xml.
-    # Only public-facing routes remain.
+    # Anonymous GET /graphql (no auth signals) has had its Cookie stripped and
+    # returned (hash); authenticated /graphql was already passed above.
+    # POST /graphql falls through the GET/HEAD guard above and is passed.
+    # Only public-facing GET/HEAD routes remain here.
     #
     # Logic:
     #   • No session/auth cookies → strip all cookies so the response can
@@ -202,8 +225,11 @@ sub vcl_hash {
         hash_data(req.http.X-Accept-Image);
     }
 
-    # add hash for graphql caching
-    if (req.url ~ "^/graphql" && req.method == "POST") {
+    # GraphQL GET — incorporate query-id into cache key so different persistent
+    # queries cached at the same /graphql URL map to distinct cache objects.
+    # Only GET reaches here: vcl_recv passes POST and all non-GET /graphql
+    # requests to origin before hash, so no POST body collision is possible.
+    if (req.method == "GET" && req.url ~ "^/graphql") {
         if (req.http.x-graphql-query-id) {
             hash_data(req.http.x-graphql-query-id);
         }
@@ -216,6 +242,25 @@ sub vcl_hash {
 # vcl_backend_response — set TTLs and grace periods
 # =============================================================================
 sub vcl_backend_response {
+
+    # -------------------------------------------------------------------------
+    # GraphQL JSON — cache it (only for anonymous, cacheable 200 JSON responses)
+    #
+    # Gated on both response signals (status, Content-Type, Cache-Control) and
+    # request auth signals (Authorization, X-WP-Nonce, session cookies) so
+    # that authenticated or personalized responses are never stored in cache,
+    # even if vcl_recv somehow passed them to origin.
+    # -------------------------------------------------------------------------
+    if (bereq.url ~ "^/graphql" &&
+        beresp.status == 200 &&
+        beresp.http.Content-Type ~ "application/json" &&
+        beresp.http.Cache-Control !~ "(?i)no-store|no-cache|private" &&
+        !bereq.http.Authorization &&
+        !bereq.http.X-WP-Nonce &&
+        bereq.http.Cookie !~ "(?i)(wp_logged_in|wordpress_logged_in_|wp-postpass_|woocommerce_cart_hash|woocommerce_items_in_cart|wp_woocommerce_session_|SCF_)") {
+        set beresp.ttl = 1h;
+        set beresp.grace = 5m;
+    }
     # -------------------------------------------------------------------------
     # Public HTML pages — 10-minute TTL with stale-while-revalidate grace
     # of 60 seconds so users never see a cache-miss stall.
