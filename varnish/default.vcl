@@ -86,28 +86,20 @@ sub vcl_recv {
         return (pass);
     }
 
-    # GraphQL — POST-only endpoint; cache only fully-anonymous requests.
-    if (req.method == "GET" && req.url ~ "^/graphql") {
-    # The GraphQL endpoint accepts POST only (GET is blocked at the Nginx and
-    # Apache layers for data-leakage reasons — see nginx Section 12.1 and
-    # apache/sites-available/system-core.conf).
+    # GraphQL — cache anonymous GET requests only.
     #
-    # Caching strategy:
-    #   • Non-POST methods         → pass (belt-and-suspenders; should never
-    #                                occur in practice).
-    #   • Auth signals present     → pass; never risk caching a credentialed
-    #                                or personalized response.
-    #     Auth signals checked:
-    #       - Authorization header (Bearer/Basic tokens, JWT, etc.)
-    #       - X-WP-Nonce header    (WordPress nonce — user-scoped)
-    #       - Known session/auth cookie names (same allowlist as the general
-    #         cookie allowlist below, plus SCF_ for Submission Core).
-    #   • Anonymous POST (no auth signals) → strip Cookie and go to cache
-    #     lookup so public/shared GraphQL queries can be served from cache.
-    if (req.url ~ "^/graphql") {
-        if (req.method != "POST") {
-            return (pass);
-        }
+    # WP GraphQL's GET-based persistent-query caching issues GET requests; the
+    # data served here is a static public dictionary (words + definitions) that
+    # is never user-specific, so anonymous GET responses are safe to cache.
+    # POST and other methods fall through to the "Only cache GET/HEAD" guard
+    # below, which passes them to origin uncached.
+    #
+    # Auth signals checked (any → pass to origin, never cache):
+    #   - Authorization header  (Bearer/Basic tokens, JWT, etc.)
+    #   - X-WP-Nonce header     (WordPress nonce — user-scoped)
+    #   - Known session/auth cookies (same allowlist as the general cookie
+    #     allowlist below, plus SCF_ for Submission Core).
+    if (req.method == "GET" && req.url ~ "^/graphql") {
         if (req.http.Authorization ||
             req.http.X-WP-Nonce ||
             req.http.Cookie ~ "(?i)(wp_logged_in|wordpress_logged_in_|wp-postpass_|woocommerce_cart_hash|woocommerce_items_in_cart|wp_woocommerce_session_|SCF_)") {
@@ -162,8 +154,9 @@ sub vcl_recv {
     # At this point in vcl_recv, all bypass routes have already returned:
     # /wp-admin, /wp-*.php, /star-*, /cart, /files/, /submission,
     # /index.php, /xmlrpc.php, /sitemap*.xml.
-    # Anonymous POST /graphql (no auth signals) has had its Cookie stripped and
+    # Anonymous GET /graphql (no auth signals) has had its Cookie stripped and
     # returned (hash); authenticated /graphql was already passed above.
+    # POST /graphql falls through the GET/HEAD guard above and is passed.
     # Only public-facing GET/HEAD routes remain here.
     #
     # Logic:
