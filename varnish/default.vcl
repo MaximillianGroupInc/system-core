@@ -99,12 +99,13 @@ sub vcl_recv {
     # Auth signals checked (any → pass to origin, never cache):
     #   - Authorization header  (Bearer/Basic tokens, JWT, etc.)
     #   - X-WP-Nonce header     (WordPress nonce — user-scoped)
-    #   - Known session/auth cookies (same allowlist as the general cookie
-    #     allowlist below, plus SCF_ for Submission Core).
+    #   - Known session/auth and UX-affecting cookies (aligned with the
+    #     general cookie allowlist; extend alongside it as needed, plus SCF_
+    #     for Submission Core).
     if (req.method == "GET" && req.url ~ "^/graphql") {
         if (req.http.Authorization ||
             req.http.X-WP-Nonce ||
-            req.http.Cookie ~ "(?i)(wp_logged_in|wordpress_logged_in_|wp-postpass_|woocommerce_cart_hash|woocommerce_items_in_cart|wp_woocommerce_session_|SCF_)") {
+            req.http.Cookie ~ "(?i)(wp_logged_in|wordpress_logged_in_|wp-postpass_|woocommerce_cart_hash|woocommerce_items_in_cart|wp_woocommerce_session_|woocommerce_recently_viewed|store_notice|SCF_)") {
             return (pass);
         }
         unset req.http.Cookie;
