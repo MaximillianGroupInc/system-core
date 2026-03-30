@@ -224,8 +224,11 @@ sub vcl_hash {
         hash_data(req.http.X-Accept-Image);
     }
 
-    # add hash for graphql caching
-    if (req.url ~ "^/graphql") {
+    # GraphQL GET — incorporate query-id into cache key so different persistent
+    # queries cached at the same /graphql URL map to distinct cache objects.
+    # Only GET reaches here: vcl_recv passes POST and all non-GET /graphql
+    # requests to origin before hash, so no POST body collision is possible.
+    if (req.method == "GET" && req.url ~ "^/graphql") {
         if (req.http.x-graphql-query-id) {
             hash_data(req.http.x-graphql-query-id);
         }
