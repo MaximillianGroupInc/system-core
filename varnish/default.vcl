@@ -99,9 +99,9 @@ sub vcl_recv {
     # Auth signals checked (any → pass to origin, never cache):
     #   - Authorization header  (Bearer/Basic tokens, JWT, etc.)
     #   - X-WP-Nonce header     (WordPress nonce — user-scoped)
-    #   - Known session/auth and UX-affecting cookies (aligned with the
-    #     general cookie allowlist; extend alongside it as needed, plus SCF_
-    #     for Submission Core).
+    #   - Known session/auth and UX-affecting cookies (explicit list below;
+    #     keep in sync with the general cookie allowlist where semantics
+    #     overlap, including SCF_ for Submission Core).
     if (req.method == "GET" && req.url ~ "^/graphql") {
         if (req.http.Authorization ||
             req.http.X-WP-Nonce ||
