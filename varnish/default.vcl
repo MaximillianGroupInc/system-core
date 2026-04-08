@@ -99,13 +99,18 @@ sub vcl_recv {
     # Auth signals checked (any → pass to origin, never cache):
     #   - Authorization header  (Bearer/Basic tokens, JWT, etc.)
     #   - X-WP-Nonce header     (WordPress nonce — user-scoped)
-    #   - Known session/auth and UX-affecting cookies (explicit list below;
+    #   - Known session/auth and UX-state cookies (explicit list below;
     #     keep in sync with the general cookie allowlist where semantics
     #     overlap, including SCF_ for Submission Core).
+    #     UX-state cookies (bypass so plugins keep their per-visitor state):
+    #       woocommerce_recently_viewed — recently-viewed product list.
+    #       store_notice                — store notice dismissal state.
+    #     Security/auth cookies:
+    #       wfwaf-authcookie-           — Wordfence firewall authentication.
     if (req.method == "GET" && req.url ~ "^/graphql") {
         if (req.http.Authorization ||
             req.http.X-WP-Nonce ||
-            req.http.Cookie ~ "(?i)(wp_logged_in|wordpress_logged_in_|wp-postpass_|woocommerce_cart_hash|woocommerce_items_in_cart|wp_woocommerce_session_|woocommerce_recently_viewed|store_notice|SCF_)") {
+            req.http.Cookie ~ "(?i)(wp_logged_in|wordpress_logged_in_|wp-postpass_|woocommerce_cart_hash|woocommerce_items_in_cart|wp_woocommerce_session_|woocommerce_recently_viewed|store_notice|wfwaf-authcookie-|SCF_)") {
             return (pass);
         }
         unset req.http.Cookie;
@@ -171,7 +176,7 @@ sub vcl_recv {
     # prefixes as substrings within the Cookie header value.
     # -------------------------------------------------------------------------
     if (req.http.Cookie) {
-        if (req.http.Cookie !~ "(?i)(wp_logged_in|wordpress_logged_in_|wp-postpass_|woocommerce_cart_hash|woocommerce_items_in_cart|wp_woocommerce_session_|woocommerce_recently_viewed|store_notice|SCF_)") {
+        if (req.http.Cookie !~ "(?i)(wp_logged_in|wordpress_logged_in_|wp-postpass_|woocommerce_cart_hash|woocommerce_items_in_cart|wp_woocommerce_session_|woocommerce_recently_viewed|store_notice|wfwaf-authcookie-|SCF_)") {
             # No recognised session cookie — strip and allow cache lookup.
             unset req.http.Cookie;
         } else {
@@ -257,7 +262,7 @@ sub vcl_backend_response {
         beresp.http.Cache-Control !~ "(?i)no-store|no-cache|private" &&
         !bereq.http.Authorization &&
         !bereq.http.X-WP-Nonce &&
-        bereq.http.Cookie !~ "(?i)(wp_logged_in|wordpress_logged_in_|wp-postpass_|woocommerce_cart_hash|woocommerce_items_in_cart|wp_woocommerce_session_|SCF_)") {
+        bereq.http.Cookie !~ "(?i)(wp_logged_in|wordpress_logged_in_|wp-postpass_|woocommerce_cart_hash|woocommerce_items_in_cart|wp_woocommerce_session_|woocommerce_recently_viewed|store_notice|wfwaf-authcookie-|SCF_)") {
         set beresp.ttl = 1h;
         set beresp.grace = 5m;
     }
