@@ -219,6 +219,33 @@ sub vcl_pipe {
 }
 
 # =============================================================================
+# vcl_backend_error — backend connection/fetch failure handling
+# Called when Varnish cannot establish a connection to the backend or the
+# backend closes the connection before sending a valid response (e.g. stale
+# keepalive TCP reset, connect timeout, invalid response line).
+# =============================================================================
+sub vcl_backend_error {
+    # Background revalidation (stale-while-revalidate): if the backend is
+    # temporarily unavailable, keep serving the existing cached object rather
+    # than replacing it with a synthetic error.  The next foreground request
+    # will trigger a fresh attempt once the backend recovers.
+    if (bereq.is_bgfetch) {
+        return (abandon);
+    }
+
+    # Foreground miss: retry once before synthesising an error response.
+    # bereq.retries is incremented automatically on each retry, so this
+    # attempts exactly one reconnect (covers stale keepalive TCP resets and
+    # brief Apache PHP-FPM hiccups) and then falls through to deliver the
+    # synthetic error on the second failure.
+    if (bereq.retries < 1) {
+        return (retry);
+    }
+
+    return (deliver);
+}
+
+# =============================================================================
 # vcl_hash — cache key construction
 # =============================================================================
 sub vcl_hash {
@@ -279,9 +306,18 @@ sub vcl_backend_response {
                 set beresp.ttl   = 10m;
                 set beresp.grace = 60s;
             } else {
-                # Short TTL for error pages — avoids persisting transient errors.
-                set beresp.ttl   = 5s;
-                set beresp.grace = 0s;
+                # Error/redirect response — mark uncacheable so every new
+                # request gets a fresh backend attempt rather than receiving
+                # a cached error page.  WordPress's fatal-error handler only
+                # sends Cache-Control: no-cache for logged-in users; anonymous
+                # 5xx pages carry no Cache-Control and would otherwise be
+                # briefly stored, causing subsequent requests within the TTL
+                # window to receive the same error.  beresp.ttl controls the
+                # lifetime of the hit-for-miss record (Varnish remembers "this
+                # URL is uncacheable" for this long before trying again).
+                set beresp.uncacheable = true;
+                set beresp.ttl         = 5s;
+                return (deliver);
             }
         }
     }
