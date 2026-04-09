@@ -298,30 +298,39 @@ sub vcl_backend_response {
         set beresp.grace = 5m;
     }
     # -------------------------------------------------------------------------
-    # Public HTML pages — 10-minute TTL with stale-while-revalidate grace
-    # of 60 seconds so users never see a cache-miss stall.
-    # Only 2xx responses are eligible; 3xx redirects (which may be temporary)
-    # and error pages (4xx/5xx) get a short TTL to prevent stale redirect
-    # targets or transient errors from being served from cache for 10 minutes.
+    # Public HTML pages — TTL by response class.
+    #
+    # 2xx  — 10-minute TTL with stale-while-revalidate grace of 60 seconds so
+    #         users never see a cache-miss stall.
+    # 3xx  — short 5-second TTL, no grace. Stable 301 redirects are fine to
+    #         cache briefly; a 5-second window avoids hammering origin on hot
+    #         redirect paths while still recovering quickly if the target changes.
+    # 4xx  — short 5-second TTL, no grace. Common 404s don't need to bypass
+    #         cache entirely, but should not persist long enough to mask a newly
+    #         published URL.
+    # 5xx  — mark uncacheable (hit-for-miss). WordPress's fatal-error handler
+    #         only sends Cache-Control: no-cache for logged-in users; anonymous
+    #         5xx pages carry no Cache-Control header and must not be briefly
+    #         stored. Without beresp.uncacheable = true, all requests within the
+    #         TTL window would receive the cached error page rather than getting
+    #         a fresh backend attempt. beresp.ttl controls only the lifetime of
+    #         the hit-for-miss record (how long Varnish remembers "this URL is
+    #         currently uncacheable" before trying the backend again).
     # -------------------------------------------------------------------------
     if (beresp.http.Content-Type ~ "text/html") {
         if (beresp.http.Cache-Control !~ "(?i)no-store|no-cache|private") {
             if (beresp.status >= 200 && beresp.status < 300) {
                 set beresp.ttl   = 10m;
                 set beresp.grace = 60s;
-            } else {
-                # Error/redirect response — mark uncacheable so every new
-                # request gets a fresh backend attempt rather than receiving
-                # a cached error page.  WordPress's fatal-error handler only
-                # sends Cache-Control: no-cache for logged-in users; anonymous
-                # 5xx pages carry no Cache-Control and would otherwise be
-                # briefly stored, causing subsequent requests within the TTL
-                # window to receive the same error.  beresp.ttl controls the
-                # lifetime of the hit-for-miss record (Varnish remembers "this
-                # URL is uncacheable" for this long before trying again).
+            } elsif (beresp.status >= 500 && beresp.status < 600) {
+                # 5xx — never cache; each request gets a fresh backend attempt.
                 set beresp.uncacheable = true;
                 set beresp.ttl         = 5s;
                 return (deliver);
+            } else {
+                # 3xx / 4xx — brief TTL; do not persist but do not flood origin.
+                set beresp.ttl   = 5s;
+                set beresp.grace = 0s;
             }
         }
     }
