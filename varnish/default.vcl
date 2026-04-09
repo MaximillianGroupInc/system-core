@@ -233,12 +233,16 @@ sub vcl_backend_error {
         return (abandon);
     }
 
-    # Foreground miss: retry once before synthesising an error response.
-    # bereq.retries is incremented automatically on each retry, so this
-    # attempts exactly one reconnect (covers stale keepalive TCP resets and
-    # brief Apache PHP-FPM hiccups) and then falls through to deliver the
-    # synthetic error on the second failure.
-    if (bereq.retries < 1) {
+    # Foreground request: retry once only for safe methods before
+    # synthesising an error response. bereq.retries is incremented
+    # automatically on each retry, so this attempts exactly one reconnect
+    # (covers stale keepalive TCP resets and brief Apache/PHP-FPM hiccups)
+    # and then falls through to deliver the synthetic error on the second
+    # failure. Non-idempotent methods must not be retried here because the
+    # backend may already have processed the first attempt before the
+    # connection failed.
+    if (bereq.retries < 1 &&
+        (bereq.method == "GET" || bereq.method == "HEAD")) {
         return (retry);
     }
 
