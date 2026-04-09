@@ -318,15 +318,20 @@ sub vcl_backend_response {
     #         currently uncacheable" before trying the backend again).
     # -------------------------------------------------------------------------
     if (beresp.http.Content-Type ~ "text/html") {
+        if (beresp.status >= 500 && beresp.status < 600) {
+            # 5xx — never cache regardless of Cache-Control headers.
+            # WordPress plugins and upstream components may send conflicting
+            # or absent Cache-Control on error pages; error handling must be
+            # deterministic and must not depend on upstream headers.
+            set beresp.uncacheable = true;
+            set beresp.ttl         = 5s;
+            return (deliver);
+        }
+
         if (beresp.http.Cache-Control !~ "(?i)no-store|no-cache|private") {
             if (beresp.status >= 200 && beresp.status < 300) {
                 set beresp.ttl   = 10m;
                 set beresp.grace = 60s;
-            } elsif (beresp.status >= 500 && beresp.status < 600) {
-                # 5xx — never cache; each request gets a fresh backend attempt.
-                set beresp.uncacheable = true;
-                set beresp.ttl         = 5s;
-                return (deliver);
             } else {
                 # 3xx / 4xx — brief TTL; do not persist but do not flood origin.
                 set beresp.ttl   = 5s;
