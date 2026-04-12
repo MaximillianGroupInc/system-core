@@ -219,6 +219,37 @@ sub vcl_pipe {
 }
 
 # =============================================================================
+# vcl_backend_error — backend connection/fetch failure handling
+# Called when Varnish cannot establish a connection to the backend or the
+# backend closes the connection before sending a valid response (e.g. stale
+# keepalive TCP reset, connect timeout, invalid response line).
+# =============================================================================
+sub vcl_backend_error {
+    # Background revalidation (stale-while-revalidate): if the backend is
+    # temporarily unavailable, keep serving the existing cached object rather
+    # than replacing it with a synthetic error.  The next foreground request
+    # will trigger a fresh attempt once the backend recovers.
+    if (bereq.is_bgfetch) {
+        return (abandon);
+    }
+
+    # Foreground request: retry once only for safe methods before
+    # synthesising an error response. bereq.retries is incremented
+    # automatically on each retry, so this attempts exactly one reconnect
+    # (covers stale keepalive TCP resets and brief Apache/PHP-FPM hiccups)
+    # and then falls through to deliver the synthetic error on the second
+    # failure. Non-idempotent methods must not be retried here because the
+    # backend may already have processed the first attempt before the
+    # connection failed.
+    if (bereq.retries < 1 &&
+        (bereq.method == "GET" || bereq.method == "HEAD")) {
+        return (retry);
+    }
+
+    return (deliver);
+}
+
+# =============================================================================
 # vcl_hash — cache key construction
 # =============================================================================
 sub vcl_hash {
@@ -267,19 +298,42 @@ sub vcl_backend_response {
         set beresp.grace = 5m;
     }
     # -------------------------------------------------------------------------
-    # Public HTML pages — 10-minute TTL with stale-while-revalidate grace
-    # of 60 seconds so users never see a cache-miss stall.
-    # Only 2xx responses are eligible; 3xx redirects (which may be temporary)
-    # and error pages (4xx/5xx) get a short TTL to prevent stale redirect
-    # targets or transient errors from being served from cache for 10 minutes.
+    # Public HTML pages — TTL by response class.
+    #
+    # 2xx  — 10-minute TTL with stale-while-revalidate grace of 60 seconds so
+    #         users never see a cache-miss stall.
+    # 3xx  — short 5-second TTL, no grace. Stable 301 redirects are fine to
+    #         cache briefly; a 5-second window avoids hammering origin on hot
+    #         redirect paths while still recovering quickly if the target changes.
+    # 4xx  — short 5-second TTL, no grace. Common 404s don't need to bypass
+    #         cache entirely, but should not persist long enough to mask a newly
+    #         published URL.
+    # 5xx  — mark uncacheable (hit-for-miss). WordPress's fatal-error handler
+    #         only sends Cache-Control: no-cache for logged-in users; anonymous
+    #         5xx pages carry no Cache-Control header and must not be briefly
+    #         stored. Without beresp.uncacheable = true, all requests within the
+    #         TTL window would receive the cached error page rather than getting
+    #         a fresh backend attempt. beresp.ttl controls only the lifetime of
+    #         the hit-for-miss record (how long Varnish remembers "this URL is
+    #         currently uncacheable" before trying the backend again).
     # -------------------------------------------------------------------------
     if (beresp.http.Content-Type ~ "text/html") {
+        if (beresp.status >= 500 && beresp.status < 600) {
+            # 5xx — never cache regardless of Cache-Control headers.
+            # WordPress plugins and upstream components may send conflicting
+            # or absent Cache-Control on error pages; error handling must be
+            # deterministic and must not depend on upstream headers.
+            set beresp.uncacheable = true;
+            set beresp.ttl         = 5s;
+            return (deliver);
+        }
+
         if (beresp.http.Cache-Control !~ "(?i)no-store|no-cache|private") {
             if (beresp.status >= 200 && beresp.status < 300) {
                 set beresp.ttl   = 10m;
                 set beresp.grace = 60s;
             } else {
-                # Short TTL for error pages — avoids persisting transient errors.
+                # 3xx / 4xx — brief TTL; do not persist but do not flood origin.
                 set beresp.ttl   = 5s;
                 set beresp.grace = 0s;
             }
