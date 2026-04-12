@@ -414,7 +414,8 @@ sub vcl_backend_response {
     # Video: similar Accept-based negotiation for video/webm vs video/mp4.
     # ⚠  Extension list must stay in sync with the audio/video TTL rule above.
     # -------------------------------------------------------------------------
-    if (bereq.url ~ "\.(jpg|jpeg|png|gif|svg|ico|webp|avif|mp3|mp4|mpeg|mpg|ogg|webm|weba|wav|flac|aac|m4a|m4v|opus|mov|avi|mkv|flv|wmv)(\?.*)?$") {
+    # Modified to only Vary on Audio/Video, leaving Images alone for Cloudflare
+    if (bereq.url ~ "\.(mp3|mp4|mpeg|mpg|ogg|webm|weba|wav|flac|aac|m4a|m4v|opus|mov|avi|mkv|flv|wmv)(\?.*)?$") {
         if (beresp.http.Vary) {
             set beresp.http.Vary = beresp.http.Vary + ", Accept";
         } else {
