@@ -403,18 +403,20 @@ sub vcl_backend_response {
     }
 
     # -------------------------------------------------------------------------
-    # Add Vary: Accept for image and audio/video format negotiation.
-    # Only applied to media responses — avoids fragmenting the HTML/text/JS
-    # cache on the full Accept header value and destroying hit rates.
+    # Add Vary: Accept for audio/video format negotiation.
+    # Only applied to audio/video responses — avoids fragmenting the HTML/text/
+    # JS/image cache on the full Accept header value and destroying hit rates.
+    # Images are intentionally excluded: Cloudflare handles WebP/AVIF
+    # negotiation itself and does not forward Vary: Accept correctly, so adding
+    # it for images would cause cache fragmentation without benefit.
     #
-    # Images: browsers negotiate WebP/AVIF via Accept: image/avif, image/webp.
     # Audio: clients negotiate containers via Accept (e.g., audio/webm [weba]
     # vs audio/ogg vs audio/mpeg [mp3] vs audio/wav) based on codec support or
     # bandwidth capability — each variant gets its own cache slot.
     # Video: similar Accept-based negotiation for video/webm vs video/mp4.
     # ⚠  Extension list must stay in sync with the audio/video TTL rule above.
     # -------------------------------------------------------------------------
-    if (bereq.url ~ "\.(jpg|jpeg|png|gif|svg|ico|webp|avif|mp3|mp4|mpeg|mpg|ogg|webm|weba|wav|flac|aac|m4a|m4v|opus|mov|avi|mkv|flv|wmv)(\?.*)?$") {
+    if (bereq.url ~ "\.(mp3|mp4|mpeg|mpg|ogg|webm|weba|wav|flac|aac|m4a|m4v|opus|mov|avi|mkv|flv|wmv)(\?.*)?$") {
         if (beresp.http.Vary) {
             set beresp.http.Vary = beresp.http.Vary + ", Accept";
         } else {
