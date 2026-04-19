@@ -138,7 +138,9 @@ sub vcl_recv {
         return (pass);
     }
 
-    # index.php and xmlrpc.php — pass (Nginx blocks xmlrpc; belt-and-suspenders).
+    # index.php and xmlrpc.php — always pass; never cache.
+    # Nginx restricts xmlrpc.php to a trusted-IP allowlist; Varnish passes it
+    # unconditionally as a belt-and-suspenders measure.
     if (req.url ~ "(?i)^/(index|xmlrpc)\.php") {
         return (pass);
     }
