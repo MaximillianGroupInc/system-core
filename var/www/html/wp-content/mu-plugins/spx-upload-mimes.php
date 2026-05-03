@@ -1,0 +1,102 @@
+<?php
+/**
+ * Plugin Name: SPX Upload MIME Types
+ * Description: Extends the WordPress Media Library to allow ICO (favicon),
+ *              WAV, and MP3 file uploads.  Installed as a must-use plugin so
+ *              the allowlist is always active regardless of active plugins.
+ *
+ * Background
+ * ----------
+ * WordPress deliberately omits ICO from its default upload_mimes list (legacy
+ * IE security policy) and relies on PHP's fileinfo/libmagic extension to
+ * verify that the detected MIME type matches the declared extension.  On
+ * Ubuntu 22/24 with PHP 8.2/8.3, libmagic frequently returns:
+ *
+ *   • WAV  → audio/x-wav  (WordPress expects audio/wav)
+ *   • MP3  → audio/x-mpeg (WordPress expects audio/mpeg)
+ *   • ICO  → not in default allowlist at all
+ *
+ * Both hooks below are required:
+ *   1. upload_mimes              – adds ICO to the extension → MIME map so
+ *                                  WordPress does not reject it before even
+ *                                  reaching the fileinfo check.
+ *   2. wp_check_filetype_and_ext – overrides the fileinfo verdict for the
+ *                                  three extensions so that a MIME mismatch
+ *                                  between libmagic and the WordPress map
+ *                                  does not veto the upload.
+ *
+ * Standard WordPress Media Library uploads (via /wp-admin/async-upload.php
+ * or /wp-json/wp/v2/media) are used for these file types.  The TUS resumable
+ * upload endpoint (/files/) is reserved exclusively for Submission Core audio
+ * ingestion and must NOT be used for Media Library uploads.
+ */
+
+defined( 'ABSPATH' ) || exit;
+
+/**
+ * Canonical extension → MIME map for the three types this plugin unlocks.
+ *
+ * Single source of truth used by both the upload_mimes allowlist filter and
+ * the wp_check_filetype_and_ext fileinfo-override filter below.
+ *
+ * @var array<string, string>
+ */
+const SPX_EXTRA_MIMES = [
+    'ico' => 'image/x-icon',
+    'wav' => 'audio/wav',
+    'mp3' => 'audio/mpeg',
+];
+
+/**
+ * Add ICO to the allowed upload MIME types.
+ * WAV and MP3 are already present in WordPress's default list; they are
+ * included here to make the mapping explicit and consistent.
+ *
+ * @param array $mimes Existing extension => MIME map.
+ * @return array
+ */
+add_filter( 'upload_mimes', static function ( array $mimes ): array {
+    foreach ( SPX_EXTRA_MIMES as $ext => $mime ) {
+        $mimes[ $ext ] = $mime;
+    }
+    return $mimes;
+} );
+
+/**
+ * Override fileinfo/libmagic MIME detection for ICO, WAV, and MP3.
+ *
+ * PHP's fileinfo extension (libmagic) returns non-canonical MIME strings for
+ * these formats on Ubuntu 22/24 with PHP 8.2/8.3:
+ *   WAV → audio/x-wav  instead of audio/wav
+ *   MP3 → audio/x-mpeg instead of audio/mpeg
+ *
+ * WordPress's wp_check_filetype_and_ext() compares the detected MIME against
+ * the upload_mimes map and blocks the upload if they differ.  This filter
+ * supplies the canonical MIME string directly, bypassing libmagic for these
+ * three known-safe extensions and leaving all other types to the default check.
+ *
+ * @param array       $data     {ext, type, proper_filename} from the default check.
+ * @param string      $file     Full path to the temporary upload file.
+ * @param string      $filename Original filename supplied by the client.
+ * @param array       $mimes    Allowed MIME map passed to the check.
+ * @return array
+ */
+add_filter( 'wp_check_filetype_and_ext', static function (
+    array $data,
+    string $file,
+    string $filename,
+    array $mimes
+): array {
+    $ext = strtolower( (string) pathinfo( $filename, PATHINFO_EXTENSION ) );
+
+    if ( isset( SPX_EXTRA_MIMES[ $ext ] ) ) {
+        // Only override when the default check did not already resolve the
+        // type (i.e. libmagic returned a mismatched or empty MIME string).
+        if ( empty( $data['ext'] ) || empty( $data['type'] ) ) {
+            $data['ext']  = $ext;
+            $data['type'] = SPX_EXTRA_MIMES[ $ext ];
+        }
+    }
+
+    return $data;
+}, 10, 4 );
