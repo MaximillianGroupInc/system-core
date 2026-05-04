@@ -48,6 +48,21 @@ const SPX_EXTRA_MIMES = [
 ];
 
 /**
+ * MIME strings that PHP's finfo/libmagic may legitimately return for genuine
+ * files of each extension.  The override in wp_check_filetype_and_ext is only
+ * applied when the detected MIME is one of these known-good variants, ensuring
+ * that a non-audio/non-ICO file renamed to one of these extensions is still
+ * rejected by WordPress's file-content validation.
+ *
+ * @var array<string, list<string>>
+ */
+const SPX_FINFO_VARIANTS = [
+    'ico' => [ 'image/vnd.microsoft.icon', 'image/x-icon' ],
+    'wav' => [ 'audio/x-wav', 'audio/wav' ],
+    'mp3' => [ 'audio/x-mpeg', 'audio/mpeg', 'audio/mp3' ],
+];
+
+/**
  * Add ICO to the allowed upload MIME types.
  * WAV and MP3 are already present in WordPress's default list; they are
  * included here to make the mapping explicit and consistent.
@@ -72,8 +87,15 @@ add_filter( 'upload_mimes', static function ( array $mimes ): array {
  *
  * WordPress's wp_check_filetype_and_ext() compares the detected MIME against
  * the upload_mimes map and blocks the upload if they differ.  This filter
- * supplies the canonical MIME string directly, bypassing libmagic for these
- * three known-safe extensions and leaving all other types to the default check.
+ * supplies the canonical MIME string when:
+ *   a) the extension is one of the three managed types, AND
+ *   b) the default check did not already resolve the type cleanly, AND
+ *   c) finfo independently confirms the file contents are a genuine instance
+ *      of that type (i.e. the detected MIME is in SPX_FINFO_VARIANTS).
+ *
+ * Condition (c) prevents a file with unrelated contents that has simply been
+ * renamed to .ico/.wav/.mp3 from bypassing WordPress's file-content
+ * validation — only known libmagic variants for each format are accepted.
  *
  * @param array       $data     {ext, type, proper_filename} from the default check.
  * @param string      $file     Full path to the temporary upload file.
@@ -89,14 +111,36 @@ add_filter( 'wp_check_filetype_and_ext', static function (
 ): array {
     $ext = strtolower( (string) pathinfo( $filename, PATHINFO_EXTENSION ) );
 
-    if ( isset( SPX_EXTRA_MIMES[ $ext ] ) ) {
-        // Only override when the default check did not already resolve the
-        // type (i.e. libmagic returned a mismatched or empty MIME string).
-        if ( empty( $data['ext'] ) || empty( $data['type'] ) ) {
-            $data['ext']  = $ext;
-            $data['type'] = SPX_EXTRA_MIMES[ $ext ];
+    if ( ! isset( SPX_EXTRA_MIMES[ $ext ] ) ) {
+        return $data;
+    }
+
+    // If the default check already resolved cleanly, nothing to do.
+    if ( ! empty( $data['ext'] ) && ! empty( $data['type'] ) ) {
+        return $data;
+    }
+
+    // Use finfo to inspect the actual file contents before overriding.
+    // Only proceed when the detected MIME is one of the known legitimate
+    // variants for this extension (e.g. audio/x-wav for .wav), so that a
+    // non-matching file renamed to .wav/.mp3/.ico is still rejected.
+    if ( function_exists( 'finfo_open' ) ) {
+        $finfo    = finfo_open( FILEINFO_MIME_TYPE );
+        $detected = $finfo ? finfo_file( $finfo, $file ) : false;
+        if ( $finfo ) {
+            finfo_close( $finfo );
+        }
+
+        $acceptable = SPX_FINFO_VARIANTS[ $ext ] ?? [];
+        if ( false === $detected || ! in_array( $detected, $acceptable, true ) ) {
+            // File contents do not match any known variant; leave the
+            // default rejection in place.
+            return $data;
         }
     }
+
+    $data['ext']  = $ext;
+    $data['type'] = SPX_EXTRA_MIMES[ $ext ];
 
     return $data;
 }, 10, 4 );
