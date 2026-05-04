@@ -124,19 +124,25 @@ add_filter( 'wp_check_filetype_and_ext', static function (
     // Only proceed when the detected MIME is one of the known legitimate
     // variants for this extension (e.g. audio/x-wav for .wav), so that a
     // non-matching file renamed to .wav/.mp3/.ico is still rejected.
-    if ( function_exists( 'finfo_open' ) ) {
-        $finfo    = finfo_open( FILEINFO_MIME_TYPE );
-        $detected = $finfo ? finfo_file( $finfo, $file ) : false;
-        if ( $finfo ) {
-            finfo_close( $finfo );
-        }
+    // Fail secure: if finfo is unavailable or fails to open, leave the
+    // default rejection in place rather than overriding without validation.
+    if ( ! function_exists( 'finfo_open' ) ) {
+        return $data;
+    }
 
-        $acceptable = SPX_FINFO_VARIANTS[ $ext ] ?? [];
-        if ( false === $detected || ! in_array( $detected, $acceptable, true ) ) {
-            // File contents do not match any known variant; leave the
-            // default rejection in place.
-            return $data;
-        }
+    $finfo = finfo_open( FILEINFO_MIME_TYPE );
+    if ( false === $finfo ) {
+        return $data;
+    }
+
+    $detected = finfo_file( $finfo, $file );
+    finfo_close( $finfo );
+
+    $acceptable = SPX_FINFO_VARIANTS[ $ext ] ?? [];
+    if ( false === $detected || ! in_array( $detected, $acceptable, true ) ) {
+        // File contents do not match any known variant; leave the
+        // default rejection in place.
+        return $data;
     }
 
     $data['ext']  = $ext;
