@@ -135,10 +135,17 @@ add_filter( 'wp_check_filetype_and_ext', static function (
         return $data;
     }
 
-    $detected = finfo_file( $finfo, $file );
-    finfo_close( $finfo );
+    try {
+        $detected = finfo_file( $finfo, $file );
+    } finally {
+        finfo_close( $finfo );
+    }
 
-    $acceptable = SPX_FINFO_VARIANTS[ $ext ] ?? [];
+    if ( ! isset( SPX_FINFO_VARIANTS[ $ext ] ) ) {
+        return $data;
+    }
+
+    $acceptable = SPX_FINFO_VARIANTS[ $ext ];
     if ( false === $detected || ! in_array( $detected, $acceptable, true ) ) {
         // File contents do not match any known variant; leave the
         // default rejection in place.
