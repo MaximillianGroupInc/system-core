@@ -83,6 +83,45 @@ ln -s /etc/nginx/sites-available/system-core.conf \
       /etc/nginx/sites-enabled/system-core.conf
 ```
 
+### Required Nginx modules
+
+`nginx.conf` loads dynamic modules via `include /etc/nginx/modules-enabled/*.conf;`
+(the standard Debian/Ubuntu package-manager mechanism).  The following modules
+must be enabled on the host before starting Nginx:
+
+| Module | Package | Enable command |
+|--------|---------|----------------|
+| `ngx_http_geoip2_module` | `libnginx-mod-http-geoip2` | `apt install libnginx-mod-http-geoip2` |
+| `ngx_http_brotli_filter_module` | `libnginx-mod-http-brotli` ¹ | symlink — see below |
+| `ngx_http_brotli_static_module` | `libnginx-mod-http-brotli` ¹ | symlink — see below |
+
+¹ `libnginx-mod-http-brotli` is available in Ubuntu 24.04 (Noble) and later.
+On Ubuntu 22.04 (Jammy) it is not in the standard repos; install from a PPA or
+build from source: <https://github.com/google/ngx_brotli>.
+
+Once the Brotli `.so` files are present, enable the modules by placing
+(or symlinking) load-module snippets into `/etc/nginx/modules-enabled/`:
+
+```bash
+# GeoIP2 — package install handles this automatically
+apt install libnginx-mod-http-geoip2
+
+# Brotli — Ubuntu 24.04+
+apt install libnginx-mod-http-brotli
+
+# Brotli — Ubuntu 22.04 (after building from source or installing via PPA):
+# Adjust paths to match where the .so files were installed.
+cat > /etc/nginx/modules-available/50-mod-http-brotli.conf <<'EOF'
+load_module modules/ngx_http_brotli_filter_module.so;
+load_module modules/ngx_http_brotli_static_module.so;
+EOF
+ln -s /etc/nginx/modules-available/50-mod-http-brotli.conf \
+      /etc/nginx/modules-enabled/50-mod-http-brotli.conf
+
+# Verify config after enabling modules
+nginx -t
+```
+
 ### Apache activation
 
 ```bash
