@@ -80,8 +80,9 @@ sub vcl_recv {
     set req.url = regsuball(req.url, "\?&", "?");
     set req.url = regsub(req.url, "[?&]$", "");
 
-    # For static assets, sort remaining query parameters to normalize ordering.
-    if (req.url ~ "\.(css|js|woff|woff2|ttf|otf|eot|jpg|jpeg|png|gif|svg|ico|webp|avif|mp3|mp4|ogg|webm|weba|wav|pdf|docx?|pptx?|xlsx?)(\?|&|$)") {
+    # Normalize query parameter ordering before hash construction so semantically
+    # equivalent URLs map to the same cache key regardless of parameter order.
+    if (req.url ~ "\?") {
         set req.url = std.querysort(req.url);
     }
 
