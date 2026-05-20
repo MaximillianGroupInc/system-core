@@ -20,6 +20,7 @@ backend apache {
     .host = "127.0.0.1";
     .port = "8080";
     .connect_timeout    = 5s;
+    # Keep >= Apache Timeout so Varnish does not time out before Apache/PHP-FPM.
     .first_byte_timeout = 120s;
     .between_bytes_timeout = 60s;
     .probe = {
@@ -64,7 +65,21 @@ sub vcl_recv {
     # full path so WordPress and Mercator domain mapping work correctly.
     # -------------------------------------------------------------------------
     if (!req.http.X-Forwarded-For) {
-        set req.http.X-Forwarded-For = client.ip;
+        # client.ip here is Nginx loopback (127.0.0.1), not the visitor.
+        # Nginx always forwards the real client IP in X-Real-IP.
+        set req.http.X-Forwarded-For = req.http.X-Real-IP;
+    }
+
+    # Strip tracking query parameters that never affect origin response content.
+    set req.url = regsuball(req.url, "(?i)([?&])(utm_source|utm_medium|utm_campaign|utm_term|utm_content|fbclid|gclid|msclkid|twclid|li_fat_id|mc_cid|mc_eid|_ga|_gl|igshid|epik|ttclid|zanpid|dclid|srsltid)=[^&]*", "\1");
+    set req.url = regsub(req.url, "\?$", "");
+    set req.url = regsub(req.url, "\?&", "?");
+    set req.url = regsuball(req.url, "&{2,}", "&");
+    set req.url = regsub(req.url, "[?&]$", "");
+
+    # For static assets, sort remaining query parameters to normalize ordering.
+    if (req.url ~ "\.(css|js|woff2?|ttf|otf|eot|jpg|jpeg|png|gif|svg|ico|webp|avif|mp3|mp4|ogg|webm|weba|wav|pdf|docx?|pptx?|xlsx?)(\?|&|$)") {
+        set req.url = std.querysort(req.url);
     }
 
     # -------------------------------------------------------------------------
@@ -114,6 +129,8 @@ sub vcl_recv {
             return (pass);
         }
         unset req.http.Cookie;
+        unset req.http.Authorization;
+        unset req.http.X-WP-Nonce;
         return (hash);
     }
     
@@ -433,12 +450,14 @@ sub vcl_backend_response {
 # vcl_deliver — add diagnostic headers and clean up
 # =============================================================================
 sub vcl_deliver {
-    # Add cache status header for debugging (remove in production if desired).
-    if (obj.hits > 0) {
-        set resp.http.X-Cache = "HIT";
-        set resp.http.X-Cache-Hits = obj.hits;
-    } else {
-        set resp.http.X-Cache = "MISS";
+    # Only expose cache diagnostics to trusted internal requests.
+    if (req.http.X-Internal-Debug == "1" && client.ip == 127.0.0.1) {
+        if (obj.hits > 0) {
+            set resp.http.X-Cache = "HIT";
+            set resp.http.X-Cache-Hits = obj.hits;
+        } else {
+            set resp.http.X-Cache = "MISS";
+        }
     }
 
     # Remove internal Varnish headers before delivering to Nginx/client.
@@ -453,5 +472,6 @@ sub vcl_deliver {
 # =============================================================================
 sub vcl_synth {
     set resp.http.Content-Type = "text/plain; charset=utf-8";
+    synthetic("Error " + resp.status + " " + resp.reason);
     return (deliver);
 }

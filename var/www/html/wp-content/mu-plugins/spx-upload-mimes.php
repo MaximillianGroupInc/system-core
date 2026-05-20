@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * Plugin Name: SPX Upload MIME Types
  * Description: Extends the WordPress Media Library to allow ICO (favicon),

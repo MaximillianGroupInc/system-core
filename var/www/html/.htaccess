@@ -3,11 +3,7 @@
 # Optimized for: Cloudflare -> Nginx -> Varnish -> Apache2
 ######################################################################
 
-# 1. FIX THE REDIRECT LOOP (Critical for Varnish/Nginx)
-# This tells WordPress that the request is HTTPS even though Varnish talks to Apache via HTTP
-SetEnvIf X-Forwarded-Proto "https" HTTPS=on
-
-# 2. SECURITY BASICS
+# 1. SECURITY BASICS
 ServerSignature Off
 Options +FollowSymLinks -Indexes
 Options -ExecCGI
