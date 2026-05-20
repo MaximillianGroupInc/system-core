@@ -66,15 +66,19 @@ sub vcl_recv {
     # -------------------------------------------------------------------------
     if (!req.http.X-Forwarded-For) {
         # client.ip here is Nginx loopback (127.0.0.1), not the visitor.
-        # Nginx always forwards the real client IP in X-Real-IP.
-        set req.http.X-Forwarded-For = req.http.X-Real-IP;
+        # Nginx normally forwards the real client IP in X-Real-IP.
+        if (req.http.X-Real-IP) {
+            set req.http.X-Forwarded-For = req.http.X-Real-IP;
+        } else {
+            set req.http.X-Forwarded-For = client.ip;
+        }
     }
 
     # Strip tracking query parameters that never affect origin response content.
     set req.url = regsuball(req.url, "(?i)([?&])(utm_source|utm_medium|utm_campaign|utm_term|utm_content|fbclid|gclid|msclkid|twclid|li_fat_id|mc_cid|mc_eid|_ga|_gl|igshid|epik|ttclid|zanpid|dclid|srsltid)=[^&]*", "\1");
-    set req.url = regsub(req.url, "\?$", "");
-    set req.url = regsub(req.url, "\?&", "?");
     set req.url = regsuball(req.url, "&{2,}", "&");
+    set req.url = regsuball(req.url, "\?&", "?");
+    set req.url = regsub(req.url, "\?$", "");
     set req.url = regsub(req.url, "[?&]$", "");
 
     # For static assets, sort remaining query parameters to normalize ordering.
