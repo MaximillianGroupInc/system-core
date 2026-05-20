@@ -126,7 +126,7 @@ sub vcl_recv {
     #       store_notice                — store notice dismissal state.
     #     Security/auth cookies:
     #       wfwaf-authcookie-           — Wordfence firewall authentication.
-    if (req.method == "GET" && req.url ~ "^/graphql") {
+    if ((req.method == "GET" || req.method == "HEAD") && req.url ~ "^/graphql") {
         if (req.http.Authorization ||
             req.http.X-WP-Nonce ||
             req.http.Cookie ~ "(?i)(wp_logged_in|wordpress_logged_in_|wp-postpass_|woocommerce_cart_hash|woocommerce_items_in_cart|wp_woocommerce_session_|woocommerce_recently_viewed|store_notice|wfwaf-authcookie-|SCF_)") {
@@ -284,11 +284,11 @@ sub vcl_hash {
         hash_data(req.http.X-Accept-Image);
     }
 
-    # GraphQL GET — incorporate query-id into cache key so different persistent
+    # GraphQL GET/HEAD — incorporate query-id into cache key so different persistent
     # queries cached at the same /graphql URL map to distinct cache objects.
-    # Only GET reaches here: vcl_recv passes POST and all non-GET /graphql
+    # Only GET/HEAD reaches here: vcl_recv passes POST and all non-GET/HEAD /graphql
     # requests to origin before hash, so no POST body collision is possible.
-    if (req.method == "GET" && req.url ~ "^/graphql") {
+    if ((req.method == "GET" || req.method == "HEAD") && req.url ~ "^/graphql") {
         if (req.http.x-graphql-query-id) {
             hash_data(req.http.x-graphql-query-id);
         }
