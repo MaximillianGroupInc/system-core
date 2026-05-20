@@ -78,7 +78,6 @@ sub vcl_recv {
     set req.url = regsuball(req.url, "(?i)([?&])(utm_source|utm_medium|utm_campaign|utm_term|utm_content|fbclid|gclid|msclkid|twclid|li_fat_id|mc_cid|mc_eid|_ga|_gl|igshid|epik|ttclid|zanpid|dclid|srsltid)=[^&]*", "\1");
     set req.url = regsuball(req.url, "&{2,}", "&");
     set req.url = regsuball(req.url, "\?&", "?");
-    set req.url = regsub(req.url, "\?$", "");
     set req.url = regsub(req.url, "[?&]$", "");
 
     # For static assets, sort remaining query parameters to normalize ordering.
