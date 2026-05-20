@@ -105,9 +105,9 @@ sub vcl_recv {
         return (pass);
     }
 
-    # GraphQL — cache anonymous GET requests only. Nginx allows GET/POST to
-    # /graphql (via limit_except POST GET), and Apache permits GET/HEAD so
-    # Varnish can populate its cache on a miss for GET.
+    # GraphQL — cache anonymous GET requests only. Nginx allows GET/POST/HEAD
+    # to /graphql (via limit_except POST GET HEAD), and Apache permits
+    # GET/HEAD so Varnish can populate its cache on a miss for GET.
     #
     # WP GraphQL's GET-based persistent-query caching issues GET requests; the
     # data served here is a static public dictionary (words + definitions) that
