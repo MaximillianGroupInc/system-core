@@ -78,7 +78,7 @@ sub vcl_recv {
     set req.url = regsub(req.url, "[?&]$", "");
 
     # For static assets, sort remaining query parameters to normalize ordering.
-    if (req.url ~ "\.(css|js|woff2?|ttf|otf|eot|jpg|jpeg|png|gif|svg|ico|webp|avif|mp3|mp4|ogg|webm|weba|wav|pdf|docx?|pptx?|xlsx?)(\?|&|$)") {
+    if (req.url ~ "\.(css|js|woff|woff2|ttf|otf|eot|jpg|jpeg|png|gif|svg|ico|webp|avif|mp3|mp4|ogg|webm|weba|wav|pdf|docx?|pptx?|xlsx?)(\?|&|$)") {
         set req.url = std.querysort(req.url);
     }
 

@@ -83,11 +83,7 @@ echo "OK" > /var/www/html/health && chmod 644 /var/www/html/health
 | Worker-to-Origin secret file | `/etc/nginx/secrets/worker-secret.conf` | `nginx/nginx.conf` map include + `nginx/secrets/worker-secret.conf` format comments | Nginx config test/start fails; trusted worker header gate cannot validate origin secret |
 | GeoIP2 country database | `/var/lib/GeoIP/GeoLite2-Country.mmdb` | `nginx/conf.d/spx-bot-mitigation-logic.conf` geoip2 block | Nginx config/load failure for GeoIP2 rule set |
 | TLS certificate/key pairs for configured domains | Paths resolved by `$cert_file` / `$key_file` mapping in `nginx/conf.d/spx-certs-logic.conf` (stored under `/etc/ssl/certs/` and `/etc/ssl/private/`) | `nginx/conf.d/spx-certs-logic.conf` | TLS listeners cannot start for mapped hosts |
-| Apache health probe file **[DEPLOYMENT REQUIRED]** | `/var/www/html/health` | `apache/sites-available/system-core.conf` health endpoint + `varnish/default.vcl` backend probe URL | Varnish probe returns 404, backend is marked sick, and traffic degrades to backend error handling |
-
-```bash
-test -f /var/www/html/health || { echo "OK" > /var/www/html/health && chmod 644 /var/www/html/health; }
-```
+| Apache health probe file **[DEPLOYMENT REQUIRED]** | `/var/www/html/health` | `apache/sites-available/system-core.conf` health endpoint + `varnish/default.vcl` backend probe URL | Varnish probe returns 404, backend is marked sick, and traffic degrades to backend error handling; use the command shown above in “Required files and directories” |
 
 ### Nginx sites-enabled symlink
 
