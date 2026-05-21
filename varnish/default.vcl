@@ -20,6 +20,7 @@ backend apache {
     .host = "127.0.0.1";
     .port = "8080";
     .connect_timeout    = 5s;
+    # Keep >= Apache Timeout so Varnish does not time out before Apache/PHP-FPM.
     .first_byte_timeout = 120s;
     .between_bytes_timeout = 60s;
     .probe = {
@@ -64,7 +65,25 @@ sub vcl_recv {
     # full path so WordPress and Mercator domain mapping work correctly.
     # -------------------------------------------------------------------------
     if (!req.http.X-Forwarded-For) {
-        set req.http.X-Forwarded-For = client.ip;
+        # client.ip here is Nginx loopback (127.0.0.1), not the visitor.
+        # Nginx normally forwards the real client IP in X-Real-IP.
+        if (req.http.X-Real-IP) {
+            set req.http.X-Forwarded-For = req.http.X-Real-IP;
+        } else {
+            set req.http.X-Forwarded-For = client.ip;
+        }
+    }
+
+    # Strip tracking query parameters that never affect origin response content.
+    set req.url = regsuball(req.url, "(?i)([?&])(utm_source|utm_medium|utm_campaign|utm_term|utm_content|fbclid|gclid|msclkid|twclid|li_fat_id|mc_cid|mc_eid|_ga|_gl|igshid|epik|ttclid|zanpid|dclid|srsltid)=[^&]*", "\1");
+    set req.url = regsuball(req.url, "&{2,}", "&");
+    set req.url = regsuball(req.url, "\?&", "?");
+    set req.url = regsub(req.url, "[?&]$", "");
+
+    # Normalize query parameter ordering before hash construction so semantically
+    # equivalent URLs map to the same cache key regardless of parameter order.
+    if (req.url ~ "\?") {
+        set req.url = std.querysort(req.url);
     }
 
     # -------------------------------------------------------------------------
@@ -86,9 +105,9 @@ sub vcl_recv {
         return (pass);
     }
 
-    # GraphQL — cache anonymous GET requests only. Nginx allows GET/HEAD to
-    # /graphql (via limit_except POST GET HEAD), and Apache now also permits
-    # GET/HEAD so that Varnish can populate its cache on a miss.
+    # GraphQL — cache anonymous GET requests only. Nginx allows GET/POST/HEAD
+    # to /graphql (via limit_except POST GET HEAD), and Apache permits
+    # GET/HEAD so Varnish can populate its cache on a miss for GET.
     #
     # WP GraphQL's GET-based persistent-query caching issues GET requests; the
     # data served here is a static public dictionary (words + definitions) that
@@ -107,13 +126,15 @@ sub vcl_recv {
     #       store_notice                — store notice dismissal state.
     #     Security/auth cookies:
     #       wfwaf-authcookie-           — Wordfence firewall authentication.
-    if (req.method == "GET" && req.url ~ "^/graphql") {
+    if ((req.method == "GET" || req.method == "HEAD") && req.url ~ "^/graphql") {
         if (req.http.Authorization ||
             req.http.X-WP-Nonce ||
             req.http.Cookie ~ "(?i)(wp_logged_in|wordpress_logged_in_|wp-postpass_|woocommerce_cart_hash|woocommerce_items_in_cart|wp_woocommerce_session_|woocommerce_recently_viewed|store_notice|wfwaf-authcookie-|SCF_)") {
             return (pass);
         }
         unset req.http.Cookie;
+        unset req.http.Authorization;
+        unset req.http.X-WP-Nonce;
         return (hash);
     }
     
@@ -263,11 +284,11 @@ sub vcl_hash {
         hash_data(req.http.X-Accept-Image);
     }
 
-    # GraphQL GET — incorporate query-id into cache key so different persistent
+    # GraphQL GET/HEAD — incorporate query-id into cache key so different persistent
     # queries cached at the same /graphql URL map to distinct cache objects.
-    # Only GET reaches here: vcl_recv passes POST and all non-GET /graphql
+    # Only GET/HEAD reaches here: vcl_recv passes POST and all non-GET/HEAD /graphql
     # requests to origin before hash, so no POST body collision is possible.
-    if (req.method == "GET" && req.url ~ "^/graphql") {
+    if ((req.method == "GET" || req.method == "HEAD") && req.url ~ "^/graphql") {
         if (req.http.x-graphql-query-id) {
             hash_data(req.http.x-graphql-query-id);
         }
@@ -433,12 +454,14 @@ sub vcl_backend_response {
 # vcl_deliver — add diagnostic headers and clean up
 # =============================================================================
 sub vcl_deliver {
-    # Add cache status header for debugging (remove in production if desired).
-    if (obj.hits > 0) {
-        set resp.http.X-Cache = "HIT";
-        set resp.http.X-Cache-Hits = obj.hits;
-    } else {
-        set resp.http.X-Cache = "MISS";
+    # Only expose cache diagnostics to trusted internal requests.
+    if (req.http.X-Internal-Debug == "1" && client.ip == 127.0.0.1) {
+        if (obj.hits > 0) {
+            set resp.http.X-Cache = "HIT";
+            set resp.http.X-Cache-Hits = obj.hits;
+        } else {
+            set resp.http.X-Cache = "MISS";
+        }
     }
 
     # Remove internal Varnish headers before delivering to Nginx/client.
@@ -453,5 +476,6 @@ sub vcl_deliver {
 # =============================================================================
 sub vcl_synth {
     set resp.http.Content-Type = "text/plain; charset=utf-8";
+    synthetic("Error " + resp.status + " " + resp.reason);
     return (deliver);
 }
