@@ -1,0 +1,90 @@
+name: Bug Report
+description: Report a confirmed or suspected misconfiguration or runtime failure.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for confirmed bugs or misconfigurations in Nginx,
+        Varnish, Apache, or the WordPress MU plugins. For security issues,
+        use the **private vulnerability reporting** channel instead
+        (see [SECURITY.md](../SECURITY.md)).
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected component
+      options:
+        - Nginx (perimeter layer)
+        - Varnish (cache layer)
+        - Apache (application layer)
+        - WordPress MU plugin (spx-upload-mimes.php)
+        - Multiple / unknown
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Config version / commit SHA
+      placeholder: "e.g. v1.2.0 or abc1234"
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Nginx/Varnish/Apache/PHP versions, relevant system details.
+      placeholder: |
+        OS: Ubuntu 24.04
+        Nginx: 1.26.x
+        Varnish: 7.x
+        Apache: 2.4.x
+        PHP-FPM: 8.4
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      description: What should happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: What actually happens? Include error messages and log lines.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps to trigger the issue.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: >
+        Paste relevant lines from `/var/log/nginx/error.log`,
+        `/var/log/apache2/error.log`, `varnishlog`, or PHP-FPM logs.
+        Redact any sensitive values.
+      render: text
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission checklist
+      options:
+        - label: I searched existing issues and this is not a duplicate.
+          required: true
+        - label: This is NOT a security vulnerability (use private reporting for those).
+          required: true

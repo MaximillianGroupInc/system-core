@@ -1,0 +1,146 @@
+name: Validate configuration
+
+on:
+  pull_request:
+    branches: ["main"]
+  push:
+    branches: ["main"]
+
+# Only one validation run per branch at a time; cancel stale runs on new pushes.
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  nginx:
+    name: Nginx syntax check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nginx
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y nginx
+
+      - name: Create stub secret file
+        # The repository ships an intentionally empty placeholder.
+        # nginx -t needs a syntactically valid include so we write the
+        # one-line stub that matches the expected map-entry format.
+        run: |
+          sudo mkdir -p /etc/nginx/secrets
+          echo '"__ci_stub__" 1;' | sudo tee /etc/nginx/secrets/worker-secret.conf
+
+      - name: Install stub GeoIP database
+        # GeoIP2 module requires a valid .mmdb file at load time.
+        # We install a minimal stub so nginx -t does not fail on a
+        # missing file path before it even reaches the config parse.
+        run: |
+          sudo apt-get install -y libmaxminddb-dev wget
+          sudo mkdir -p /var/lib/GeoIP
+          # Download the free GeoLite2-Country database (requires a MaxMind
+          # license key in production; for CI we use the test stub from the
+          # MaxMind test-data repository which is always publicly available).
+          wget -q -O /tmp/GeoLite2-Country.tar.gz \
+            "https://github.com/maxmind/MaxMind-DB/raw/main/test-data/GeoLite2-Country-Test.mmdb" \
+            || wget -q -O /tmp/GeoLite2-Country.tar.gz \
+               "https://github.com/maxmind/MaxMind-DB/raw/main/test-data/GeoLite2-Country.mmdb" \
+            || true
+          # Fall back to an empty stub if download fails (network-restricted runners).
+          if [ -f /tmp/GeoLite2-Country.tar.gz ]; then
+            sudo cp /tmp/GeoLite2-Country.tar.gz /var/lib/GeoIP/GeoLite2-Country.mmdb
+          else
+            sudo touch /var/lib/GeoIP/GeoLite2-Country.mmdb
+          fi
+
+      - name: Install stub TLS certificates
+        # nginx -t checks that ssl_certificate paths exist even in test mode.
+        run: |
+          sudo mkdir -p /etc/ssl/certs /etc/ssl/private
+          for domain in sparxstar.com aiwestafrica.com barbarabarrett.org cellularvibrations.com casanovaandrosetta.com; do
+            sudo openssl req -x509 -nodes -days 1 -newkey ec -pkeyopt ec_paramgen_curve:P-256 \
+              -keyout /etc/ssl/private/${domain}.key \
+              -out /etc/ssl/certs/${domain}.pem \
+              -subj "/CN=${domain}" 2>/dev/null
+          done
+          # sparxstar.com also references sparxstar_ecc.key
+          sudo cp /etc/ssl/private/sparxstar.com.key /etc/ssl/private/sparxstar_ecc.key
+
+      - name: Install Nginx conf.d and sites
+        run: |
+          sudo mkdir -p /etc/nginx/conf.d /etc/nginx/sites-available /etc/nginx/sites-enabled \
+                        /etc/nginx/snippets /etc/nginx/secrets
+          sudo cp nginx/conf.d/*.conf     /etc/nginx/conf.d/
+          sudo cp nginx/sites-available/* /etc/nginx/sites-available/
+          sudo ln -sf /etc/nginx/sites-available/system-core.conf \
+                      /etc/nginx/sites-enabled/system-core.conf
+          sudo cp nginx/snippets/*.conf   /etc/nginx/snippets/
+
+      - name: Install Nginx modules (GeoIP2 + Brotli)
+        run: |
+          sudo apt-get install -y libnginx-mod-http-geoip2 || true
+          # Brotli may not be available on all Ubuntu runner versions.
+          sudo apt-get install -y libnginx-mod-http-brotli || true
+
+      - name: Nginx syntax test
+        run: |
+          sudo nginx -t -c ${{ github.workspace }}/nginx/nginx.conf
+
+  varnish:
+    name: Varnish VCL syntax check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Varnish
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y varnish
+
+      - name: VCL syntax check
+        run: |
+          sudo varnishd -C -f ${{ github.workspace }}/varnish/default.vcl
+
+  apache:
+    name: Apache syntax check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Apache
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y apache2
+
+      - name: Enable required modules
+        run: |
+          sudo a2enmod remoteip setenvif proxy_fcgi rewrite headers
+
+      - name: Install Apache config
+        run: |
+          sudo cp apache/conf-available/common-settings.conf \
+                   /etc/apache2/conf-available/common-settings.conf
+          sudo a2enconf common-settings
+          sudo cp apache/sites-available/system-core.conf \
+                   /etc/apache2/sites-available/system-core.conf
+          sudo a2ensite system-core
+
+      - name: Apache syntax check
+        run: |
+          sudo apachectl -t
+
+  php:
+    name: PHP lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+
+      - name: Lint MU plugins
+        run: |
+          find var/www/html/wp-content/mu-plugins -name "*.php" \
+            -exec php -l {} \;

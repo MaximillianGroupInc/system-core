@@ -1,0 +1,76 @@
+name: Regression Report
+description: Report a behaviour that worked correctly in a previous version and now does not.
+labels: ["regression", "bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template when a change introduced a regression — something
+        that worked before and is now broken. Include the commit or version
+        range so the bisect is fast.
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected component
+      options:
+        - Nginx (perimeter layer)
+        - Varnish (cache layer)
+        - Apache (application layer)
+        - WordPress MU plugin (spx-upload-mimes.php)
+        - Multiple / unknown
+    validations:
+      required: true
+
+  - type: input
+    id: last_good
+    attributes:
+      label: Last known good version / commit
+      placeholder: "e.g. v1.2.0 or abc1234"
+    validations:
+      required: true
+
+  - type: input
+    id: first_bad
+    attributes:
+      label: First bad version / commit
+      placeholder: "e.g. v1.2.1 or def5678"
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour (as it worked before)
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour now
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      render: text
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission checklist
+      options:
+        - label: I searched existing issues and this is not a duplicate.
+          required: true
+        - label: I have identified the approximate commit range that introduced this regression.
+          required: true

@@ -1,0 +1,23 @@
+name: Documentation Issue
+description: Report missing, incorrect, or outdated documentation.
+labels: ["documentation"]
+body:
+  - type: input
+    id: location
+    attributes:
+      label: File and section
+      placeholder: "e.g. README.md — Provisioning Notes"
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is wrong or missing?
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested correction or addition

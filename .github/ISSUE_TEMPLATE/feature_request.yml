@@ -1,0 +1,68 @@
+name: Feature Request
+description: Propose a configuration change, new capability, or improvement.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template to propose changes to the Nginx, Varnish, Apache,
+        or MU plugin configuration. Changes to production config are
+        high-risk — provide enough context for a thorough review.
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Target component
+      options:
+        - Nginx (perimeter layer)
+        - Varnish (cache layer)
+        - Apache (application layer)
+        - WordPress MU plugin
+        - Repository governance / CI
+        - Multiple
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or motivation
+      description: What gap or limitation does this address?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed
+    attributes:
+      label: Proposed change
+      description: >
+        Describe the change at the config level. Include directive names,
+        approximate placement, and any new files required.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Were other approaches evaluated? Why is this one preferred?
+
+  - type: textarea
+    id: risk
+    attributes:
+      label: Risk assessment
+      description: >
+        What could break? Does this require a service reload or restart?
+        Does it affect caching behaviour, security headers, or TLS?
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission checklist
+      options:
+        - label: I searched existing issues and this is not a duplicate.
+          required: true
+        - label: I have considered the security implications of this change.
+          required: true

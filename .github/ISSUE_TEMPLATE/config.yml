@@ -1,0 +1,10 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability (private)
+    url: https://github.com/MaximillianGroupInc/system-core/security/advisories/new
+    about: >
+      Report security vulnerabilities privately. Do NOT open a public issue
+      for security concerns. See SECURITY.md for the full policy.
+  - name: General questions
+    url: https://github.com/MaximillianGroupInc/system-core/discussions
+    about: Questions about configuration decisions or deployment.

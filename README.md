@@ -189,23 +189,23 @@ Nginx
 route that modifies state (auth, payments, form submissions) due to replay
 attack risk (Section 4.1).
 
-### HSTS `includeSubDomains` activation checklist
+### HSTS policy
 
-The default config ships with `max-age=31536000` only (no `includeSubDomains`)
-to prevent accidentally locking subdomains that are not yet HTTPS-only.
+The active config ships with `max-age=31536000; includeSubDomains; preload`.
+All hosted domains are confirmed HTTPS-only via Cloudflare.
 
-Before enabling `includeSubDomains`:
+`includeSubDomains` is enabled — every subdomain served from this origin must
+have a valid TLS certificate and must redirect HTTP → HTTPS.  Do not add a
+new subdomain to `nginx/conf.d/spx-certs-logic.conf` unless it meets this
+requirement.
 
-1. Confirm every subdomain (`www.*`, `api.*`, `cdn.*`, `mail.*`, etc.) has a
-   valid TLS certificate and redirects HTTP → HTTPS.
-2. Confirm no subdomain serves content over plain HTTP that must be reachable
-   by end users.
-3. Once confirmed, update `nginx/sites-available/system-core.conf`:
-   ```nginx
-   add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-   ```
-4. Optionally add `; preload` and submit to <https://hstspreload.org/> once
-   the `includeSubDomains` version has been live and stable for several weeks.
+`preload` signals intent to submit to the browser HSTS preload list.
+To submit or check status: <https://hstspreload.org/>
+
+To remove `preload` (e.g. when decommissioning a domain), update
+`nginx/sites-available/system-core.conf` and both
+`nginx/snippets/spx-cors-preflight-response.conf`, then wait out the
+`max-age` before removing the domain from the preload list.
 
 ### Varnish cookie allowlist
 
