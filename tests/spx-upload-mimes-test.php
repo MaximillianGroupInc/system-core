@@ -36,7 +36,7 @@ if (!isset($registeredFilters['upload_mimes'][0], $registeredFilters['wp_check_f
 $uploadMimesFilter = $registeredFilters['upload_mimes'][0];
 $filetypeFilter = $registeredFilters['wp_check_filetype_and_ext'][0];
 
-$tmpDir = sys_get_temp_dir() . '/spx-upload-mimes-tests-' . bin2hex(random_bytes(4));
+$tmpDir = sys_get_temp_dir() . '/spx-upload-mimes-tests-' . bin2hex(random_bytes(16));
 if (!mkdir($tmpDir) && !is_dir($tmpDir)) {
     throw new RuntimeException('Failed to create temporary test directory.');
 }
@@ -83,7 +83,10 @@ try {
     assertArrayHasKeyValue($icoDetected, 'ext', 'ico', 'Valid ICO content should set extension.');
     assertArrayHasKeyValue($icoDetected, 'type', 'image/x-icon', 'Valid ICO content should use canonical MIME.');
 
-    $missingFile = @$filetypeFilter($initialData, $tmpDir . '/missing.wav', 'missing.wav', []);
+    $previousErrorReporting = error_reporting();
+    error_reporting($previousErrorReporting & ~E_WARNING);
+    $missingFile = $filetypeFilter($initialData, $tmpDir . '/missing.wav', 'missing.wav', []);
+    error_reporting($previousErrorReporting);
     assertSameValue($initialData, $missingFile, 'Unreadable files should remain rejected.');
 
     echo "All tests passed.\n";
