@@ -36,8 +36,15 @@ if (!isset($registeredFilters['upload_mimes'][0], $registeredFilters['wp_check_f
 $uploadMimesFilter = $registeredFilters['upload_mimes'][0];
 $filetypeFilter = $registeredFilters['wp_check_filetype_and_ext'][0];
 
-$tmpDir = sys_get_temp_dir() . '/spx-upload-mimes-tests-' . bin2hex(random_bytes(16));
-if (!mkdir($tmpDir) && !is_dir($tmpDir)) {
+$tmpFile = tempnam(sys_get_temp_dir(), 'spx-upload-mimes-tests-');
+if ($tmpFile === false) {
+    throw new RuntimeException('Failed to allocate temporary path for tests.');
+}
+if (!unlink($tmpFile)) {
+    throw new RuntimeException('Failed to prepare temporary directory path for tests.');
+}
+$tmpDir = $tmpFile;
+if (!mkdir($tmpDir, 0700) && !is_dir($tmpDir)) {
     throw new RuntimeException('Failed to create temporary test directory.');
 }
 
@@ -61,24 +68,32 @@ try {
     assertSameValue($alreadyResolved, $resolved, 'Resolved checks should not be modified.');
 
     $fakeMp3Path = $tmpDir . '/fake.mp3';
-    file_put_contents($fakeMp3Path, 'not an mp3 payload');
+    if (file_put_contents($fakeMp3Path, 'not an mp3 payload') === false) {
+        throw new RuntimeException('Failed to write fake MP3 fixture.');
+    }
     $fakeMp3 = $filetypeFilter($initialData, $fakeMp3Path, 'fake.mp3', []);
     assertSameValue($initialData, $fakeMp3, 'Spoofed content should remain rejected.');
 
     $wavPath = $tmpDir . '/sample.wav';
-    file_put_contents(
+    // Minimal WAV payload: RIFF header + fmt chunk + data chunk.
+    if (file_put_contents(
         $wavPath,
         "RIFF\x24\x80\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x44\xac\x00\x00\x88\x58\x01\x00\x02\x00\x10\x00data\x00\x80\x00\x00"
-    );
+    ) === false) {
+        throw new RuntimeException('Failed to write WAV fixture.');
+    }
     $wavDetected = $filetypeFilter($initialData, $wavPath, 'sample.WAV', []);
     assertArrayHasKeyValue($wavDetected, 'ext', 'wav', 'WAV extension should be normalized to lowercase.');
     assertArrayHasKeyValue($wavDetected, 'type', 'audio/wav', 'Valid WAV content should be accepted.');
 
     $icoPath = $tmpDir . '/favicon.ico';
-    file_put_contents(
+    // Minimal ICO payload: ICONDIR + one directory entry + bitmap payload.
+    if (file_put_contents(
         $icoPath,
         "\x00\x00\x01\x00\x01\x00\x01\x01\x00\x00\x01\x00\x18\x00\x30\x00\x00\x00\x16\x00\x00\x00\x28\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x01\x00\x18\x00\x00\x00\x00\x00\x08\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\x00\x00\x00\x00\x00"
-    );
+    ) === false) {
+        throw new RuntimeException('Failed to write ICO fixture.');
+    }
     $icoDetected = $filetypeFilter($initialData, $icoPath, 'favicon.ico', []);
     assertArrayHasKeyValue($icoDetected, 'ext', 'ico', 'Valid ICO content should set extension.');
     assertArrayHasKeyValue($icoDetected, 'type', 'image/x-icon', 'Valid ICO content should use canonical MIME.');
