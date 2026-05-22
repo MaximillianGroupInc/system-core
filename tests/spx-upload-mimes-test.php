@@ -36,7 +36,7 @@ if (!isset($registeredFilters['upload_mimes'][0], $registeredFilters['wp_check_f
 $uploadMimesFilter = $registeredFilters['upload_mimes'][0];
 $filetypeFilter = $registeredFilters['wp_check_filetype_and_ext'][0];
 
-$tmpFile = tempnam(sys_get_temp_dir(), 'spx-upload-mimes-tests-');
+$tmpFile = tempnam(sys_get_temp_dir(), 'spx-test-');
 if ($tmpFile === false) {
     throw new RuntimeException('Failed to allocate temporary path for tests.');
 }
@@ -101,7 +101,10 @@ try {
     // Missing fixture path intentionally triggers finfo_file() warning; suppress
     // only that expected warning so we can assert fail-secure behavior.
     set_error_handler(static function (int $severity, string $message): bool {
-        return $severity === E_WARNING && str_contains($message, 'finfo_file(');
+        if ($severity === E_WARNING && str_contains($message, 'finfo_file(')) {
+            return true;
+        }
+        return false;
     });
     try {
         $missingFile = $filetypeFilter($initialData, $tmpDir . '/missing.wav', 'missing.wav', []);
@@ -114,7 +117,7 @@ try {
 } finally {
     if (is_dir($tmpDir)) {
         $entries = scandir($tmpDir);
-        if (is_array($entries)) {
+        if ($entries !== false) {
             foreach ($entries as $entry) {
                 if ($entry === '.' || $entry === '..') {
                     continue;
