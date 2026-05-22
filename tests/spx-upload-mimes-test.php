@@ -83,7 +83,7 @@ try {
     assertArrayHasKeyValue($icoDetected, 'ext', 'ico', 'Valid ICO content should set extension.');
     assertArrayHasKeyValue($icoDetected, 'type', 'image/x-icon', 'Valid ICO content should use canonical MIME.');
 
-    $missingFile = $filetypeFilter($initialData, $tmpDir . '/missing.wav', 'missing.wav', []);
+    $missingFile = @$filetypeFilter($initialData, $tmpDir . '/missing.wav', 'missing.wav', []);
     assertSameValue($initialData, $missingFile, 'Unreadable files should remain rejected.');
 
     echo "All tests passed.\n";

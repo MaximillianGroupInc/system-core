@@ -373,3 +373,20 @@ $remote_addr ... real_ip="$remote_addr" cf_connecting_ip="$http_cf_connecting_ip
 The `$request_id` trace ID is also forwarded as `X-Request-ID` to all
 upstream services (Varnish, Apache, TUS Node), enabling end-to-end request
 correlation across all log files using a single ID.
+
+## Tests
+
+This repository includes an executable PHP test harness for the WordPress MU
+plugin that manages Media Library MIME overrides:
+
+```bash
+php tests/spx-upload-mimes-test.php
+```
+
+The test coverage for `spx-upload-mimes.php` includes:
+
+- `upload_mimes` extension mapping for ICO/WAV/MP3.
+- No-op behavior for non-managed extensions.
+- No-op behavior when WordPress already resolved extension/type.
+- Secure rejection for spoofed content and unreadable files.
+- Successful canonical MIME override for valid WAV and ICO content.
