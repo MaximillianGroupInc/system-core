@@ -98,10 +98,14 @@ try {
     assertArrayHasKeyValue($icoDetected, 'ext', 'ico', 'Valid ICO content should set extension.');
     assertArrayHasKeyValue($icoDetected, 'type', 'image/x-icon', 'Valid ICO content should use canonical MIME.');
 
-    $previousErrorReporting = error_reporting();
-    error_reporting($previousErrorReporting & ~E_WARNING);
-    $missingFile = $filetypeFilter($initialData, $tmpDir . '/missing.wav', 'missing.wav', []);
-    error_reporting($previousErrorReporting);
+    set_error_handler(static function (int $severity, string $message): bool {
+        return $severity === E_WARNING && str_contains($message, 'finfo_file(');
+    });
+    try {
+        $missingFile = $filetypeFilter($initialData, $tmpDir . '/missing.wav', 'missing.wav', []);
+    } finally {
+        restore_error_handler();
+    }
     assertSameValue($initialData, $missingFile, 'Unreadable files should remain rejected.');
 
     echo "All tests passed.\n";
