@@ -37,5 +37,5 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Apache application layer: WordPress multisite, PHP-FPM 8.4, mod_remoteip, health endpoint.
 - `spx-upload-mimes.php` must-use plugin: ICO, WAV, MP3 upload support with finfo content validation.
 
-[Unreleased]: https://github.com/MaximillianGroupInc/system-core/compare/HEAD...HEAD
+[Unreleased]: https://github.com/MaximillianGroupInc/system-core/compare/v1.2.0...HEAD
 [1.2.0]: https://github.com/MaximillianGroupInc/system-core/releases/tag/v1.2.0
