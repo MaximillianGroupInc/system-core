@@ -98,6 +98,8 @@ try {
     assertArrayHasKeyValue($icoDetected, 'ext', 'ico', 'Valid ICO content should set extension.');
     assertArrayHasKeyValue($icoDetected, 'type', 'image/x-icon', 'Valid ICO content should use canonical MIME.');
 
+    // Missing fixture path intentionally triggers finfo_file() warning; suppress
+    // only that expected warning so we can assert fail-secure behavior.
     set_error_handler(static function (int $severity, string $message): bool {
         return $severity === E_WARNING && str_contains($message, 'finfo_file(');
     });
@@ -117,9 +119,14 @@ try {
                 if ($entry === '.' || $entry === '..') {
                     continue;
                 }
-                @unlink($tmpDir . '/' . $entry);
+                $entryPath = $tmpDir . '/' . $entry;
+                if (!unlink($entryPath) && file_exists($entryPath)) {
+                    fwrite(STDERR, "Cleanup warning: failed to remove fixture {$entryPath}\n");
+                }
             }
         }
-        @rmdir($tmpDir);
+        if (!rmdir($tmpDir) && is_dir($tmpDir)) {
+            fwrite(STDERR, "Cleanup warning: failed to remove temporary directory {$tmpDir}\n");
+        }
     }
 }
