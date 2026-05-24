@@ -458,7 +458,7 @@ sub vcl_backend_response {
 # =============================================================================
 sub vcl_deliver {
     # Only expose cache diagnostics to trusted internal requests.
-    if (req.http.X-Internal-Debug == "1" && client.ip ~ localhost) {
+    if (req.http.X-Internal-Debug == "1" && std.ip(req.http.X-Real-IP, client.ip) ~ localhost) {
         if (obj.hits > 0) {
             set resp.http.X-Cache = "HIT";
             set resp.http.X-Cache-Hits = obj.hits;
