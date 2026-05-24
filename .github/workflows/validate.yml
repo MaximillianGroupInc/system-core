@@ -63,13 +63,14 @@ jobs:
       - name: Install Nginx conf.d and sites
         run: |
           sudo mkdir -p /etc/nginx/conf.d /etc/nginx/sites-available /etc/nginx/sites-enabled \
-                        /etc/nginx/snippets /etc/nginx/secrets
+                        /etc/nginx/snippets /etc/nginx/secrets /etc/nginx/maps
           sudo cp nginx/conf.d/*.conf     /etc/nginx/conf.d/
           sudo cp nginx/sites-available/* /etc/nginx/sites-available/
           sudo rm -f /etc/nginx/sites-enabled/default
           sudo ln -sf /etc/nginx/sites-available/system-core.conf \
                       /etc/nginx/sites-enabled/system-core.conf
           sudo cp nginx/snippets/*.conf   /etc/nginx/snippets/
+          sudo cp nginx/maps/*.conf       /etc/nginx/maps/
 
       - name: Install Nginx modules (GeoIP2 + Brotli)
         run: |

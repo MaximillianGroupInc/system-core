@@ -56,7 +56,7 @@ Key security controls in this stack and where they live:
 | Real IP restoration | `nginx/conf.d/spx-cloudflare-trust.conf` |
 | Bot/UA mitigation | `nginx/conf.d/spx-bot-mitigation-logic.conf` |
 | CSP policy | `nginx/conf.d/spx-csp-logic.conf` |
-| CORS credentials allowlist | `nginx/conf.d/spx-cors-trusted-origins.conf` |
+| CORS credentials allowlist | `nginx/maps/spx-cors-trusted-origins.conf` |
 | TLS certificate mapping | `nginx/conf.d/spx-certs-logic.conf` |
 | Rate limiting zones | `nginx/nginx.conf` — `limit_req_zone` blocks |
 | Upload MIME validation | `var/www/html/wp-content/mu-plugins/spx-upload-mimes.php` |
