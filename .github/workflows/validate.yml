@@ -33,25 +33,14 @@ jobs:
 
       - name: Install stub GeoIP database
         # GeoIP2 module requires a valid .mmdb file at load time.
-        # We install a minimal stub so nginx -t does not fail on a
-        # missing file path before it even reaches the config parse.
         run: |
-          sudo apt-get install -y libmaxminddb-dev wget
+          sudo apt-get install -y wget ca-certificates
           sudo mkdir -p /var/lib/GeoIP
-          # Download the free GeoLite2-Country database (requires a MaxMind
-          # license key in production; for CI we use the test stub from the
-          # MaxMind test-data repository which is always publicly available).
-          wget -q -O /tmp/GeoLite2-Country.tar.gz \
-            "https://github.com/maxmind/MaxMind-DB/raw/main/test-data/GeoLite2-Country-Test.mmdb" \
-            || wget -q -O /tmp/GeoLite2-Country.tar.gz \
-               "https://github.com/maxmind/MaxMind-DB/raw/main/test-data/GeoLite2-Country.mmdb" \
-            || true
-          # Fall back to an empty stub if download fails (network-restricted runners).
-          if [ -f /tmp/GeoLite2-Country.tar.gz ]; then
-            sudo cp /tmp/GeoLite2-Country.tar.gz /var/lib/GeoIP/GeoLite2-Country.mmdb
-          else
-            sudo touch /var/lib/GeoIP/GeoLite2-Country.mmdb
-          fi
+          # CI uses MaxMind's public test database (no license key required).
+          wget -q -O /var/lib/GeoIP/GeoLite2-Country.mmdb \
+            "https://github.com/maxmind/MaxMind-DB/raw/main/test-data/GeoLite2-Country-Test.mmdb"
+          # Fail fast if the download did not produce a non-empty MMDB.
+          test -s /var/lib/GeoIP/GeoLite2-Country.mmdb
 
       - name: Install stub TLS certificates
         # nginx -t checks that ssl_certificate paths exist even in test mode.
