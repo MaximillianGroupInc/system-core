@@ -29,13 +29,10 @@ Run these commands against the files you modified before pushing.
 nginx -t -c /path/to/nginx/nginx.conf
 ```
 
-If you do not have Nginx installed locally, use the Docker one-liner:
+If you do not have Nginx installed locally, use Docker (installs Nginx + required modules inside the container):
 
-```bash
-docker run --rm \
-  -v "$(pwd)/nginx:/etc/nginx:ro" \
-  nginx:stable nginx -t
-```
+    docker run --rm -v "$(pwd)/nginx:/etc/nginx:ro" ubuntu:24.04 bash -lc \
+      'apt-get update -qq && apt-get install -y nginx libnginx-mod-http-geoip2 libnginx-mod-http-brotli && nginx -t'
 
 ### Varnish
 
