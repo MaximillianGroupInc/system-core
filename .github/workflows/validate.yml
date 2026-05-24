@@ -6,6 +6,9 @@ on:
   push:
     branches: ["main"]
 
+permissions:
+  contents: read
+
 # Only one validation run per branch at a time; cancel stale runs on new pushes.
 concurrency:
   group: validate-${{ github.ref }}
