@@ -31,7 +31,7 @@ CF_V6_URL = "https://www.cloudflare.com/ips-v6"
 
 # ---------------------------------------------------------------------------
 REPO_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_OUTPUT = REPO_ROOT / "conf.d" / "spx-cloudflare-trust.conf"
+DEFAULT_OUTPUT = REPO_ROOT / "nginx" / "conf.d" / "spx-cloudflare-trust.conf"
 
 
 def fetch_ip_ranges(url: str) -> list[str]:
