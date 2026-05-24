@@ -10,7 +10,7 @@ conf.d/spx-cloudflare-trust.conf so the RealIP module always
 trusts only verified Cloudflare edge nodes.
 
 Usage:
-    python scripts/update_cloudflare.py [--output conf.d/spx-cloudflare-trust.conf]
+    python scripts/spx-update-cloudflare.py [--output nginx/conf.d/spx-cloudflare-trust.conf]
 
 Run this monthly (or via a cron/CI job) to keep the trust list current.
 After running, always validate and reload Nginx:
