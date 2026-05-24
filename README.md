@@ -41,6 +41,7 @@ for any `/files/` traffic that reaches it via a non-standard path.
 |------|---------|
 | `nginx/nginx.conf` | Global Nginx settings: real IP restore, geo/UA maps, rate-limit zones, upstream backends |
 | `nginx/sites-available/system-core.conf` | Virtual host: TLS, security headers, UA/geo checks, SPARXSTAR header gate, per-route proxying |
+| `nginx/snippets/spx-upload-limits.conf` | Shared WordPress upload route overrides (`/wp-admin/update.php`, `/wp-admin/async-upload.php`, `/wp-json/wp/v2/media`) with raised body-size limits |
 | `varnish/default.vcl` | Cache policy: bypass rules, cookie allowlist, TTL/grace, image format negotiation |
 | `apache/sites-available/system-core.conf` | WordPress multisite: mod_remoteip, HTTPS reconstruction, PHP-FPM 8.4, health endpoint |
 
