@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 SPARXSTAR System Core v2.0
-Copyright (c) 2026 Starisian Technologies. All Rights Reserved.
+Copyright © 2026 MAXIMILLIANGROUP (Max Barrett). All Rights Reserved.
 Proprietary / Closed Source.
 
 SPARXSTAR Cloudflare IP Range Updater
@@ -10,7 +10,7 @@ nginx/conf.d/spx-cloudflare-trust.conf so the RealIP module always
 trusts only verified Cloudflare edge nodes.
 
 Usage:
-    python scripts/spx-update-cloudflare.py [--output nginx/conf.d/spx-cloudflare-trust.conf]
+    python scripts/spx-update-cloudflare.py [--output nginx/conf.d/spx-cloudflare-trust.conf] [--dry-run]
 
 Run this monthly (or via a cron/CI job) to keep the trust list current.
 After running, always validate and reload Nginx:
