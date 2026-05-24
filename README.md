@@ -186,7 +186,7 @@ Nginx
 
 ### TLS 0-RTT
 
-`ssl_early_data off` is set globally.  0-RTT must NOT be enabled on any
+`ssl_early_data off` is set globally. 0-RTT must NOT be enabled on any
 route that modifies state (auth, payments, form submissions) due to replay
 attack risk (Section 4.1).
 
