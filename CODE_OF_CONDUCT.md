@@ -44,8 +44,8 @@ individual is officially representing the community in public spaces.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the community leaders responsible for enforcement at the contact
-address listed in [SECURITY.md](SECURITY.md).
+reported to the community leaders responsible for enforcement through the
+GitHub contact channels listed in [SUPPORT.md](SUPPORT.md).
 
 All complaints will be reviewed and investigated promptly and fairly.
 

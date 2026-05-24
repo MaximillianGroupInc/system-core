@@ -26,6 +26,11 @@ For confirmed bugs or regressions:
 - Open a [GitHub Issue](https://github.com/MaximillianGroupInc/system-core/issues)
   using the appropriate template.
 
+For Code of Conduct concerns involving this repository community:
+
+- Open a [GitHub Discussion](https://github.com/MaximillianGroupInc/system-core/discussions)
+  so a maintainer can follow up.
+
 ## Security issues
 
 **Do not use public channels for security issues.**
