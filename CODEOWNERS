@@ -1,0 +1,31 @@
+# CODEOWNERS
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# Each line is a pattern followed by one or more owners.
+# The last matching pattern takes precedence.
+# Owners are automatically requested for review on every pull request
+# that touches matching paths.
+
+# Default — all files not matched below require a maintainer review.
+*                                           @MaximillianGroupInc/maintainers
+
+# Nginx perimeter configuration
+nginx/                                      @MaximillianGroupInc/maintainers
+
+# Nginx secrets placeholder — any change to this file is high-risk.
+# Must never contain an actual secret value.
+nginx/secrets/                              @MaximillianGroupInc/maintainers
+
+# Varnish cache policy
+varnish/                                    @MaximillianGroupInc/maintainers
+
+# Apache application layer
+apache/                                     @MaximillianGroupInc/maintainers
+
+# WordPress must-use plugins — PHP code running in the application layer.
+var/www/html/wp-content/mu-plugins/        @MaximillianGroupInc/maintainers
+
+# Repository governance — changes to these files require maintainer sign-off.
+CODEOWNERS                                  @MaximillianGroupInc/maintainers
+SECURITY.md                                 @MaximillianGroupInc/maintainers
+.github/                                    @MaximillianGroupInc/maintainers
