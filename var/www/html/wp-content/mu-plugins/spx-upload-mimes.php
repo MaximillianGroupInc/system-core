@@ -17,6 +17,7 @@ declare(strict_types=1);
  *   • WAV  → audio/x-wav  (WordPress expects audio/wav)
  *   • MP3  → audio/x-mpeg (WordPress expects audio/mpeg)
  *   • ICO  → not in default allowlist at all
+ *   * WEBA, M4A, ACC, FLAC, VCARD, MPEG, MP4 - as well.
  *
  * Both hooks below are required:
  *   1. upload_mimes              – adds ICO to the extension → MIME map so
@@ -44,9 +45,18 @@ defined( 'ABSPATH' ) || exit;
  * @var array<string, string>
  */
 const SPX_EXTRA_MIMES = [
-    'ico' => 'image/x-icon',
-    'wav' => 'audio/wav',
-    'mp3' => 'audio/mpeg',
+    'ico'  => 'image/x-icon',
+    'wav'  => 'audio/wav',
+    'mp3'  => 'audio/mpeg',
+    'weba' => 'audio/webm',
+    'webp' => 'image/webp',
+    'flac' => 'audio/flac',
+    'aac'  => 'audio/aac',
+    'm4a'  => 'audio/mp4',
+    'ogg'  => 'audio/ogg',
+    'mpeg' => 'video/mpeg',
+    'mp4'  => 'video/mp4',
+    'vcf' => 'text/vcard',
 ];
 
 /**
@@ -59,9 +69,18 @@ const SPX_EXTRA_MIMES = [
  * @var array<string, list<string>>
  */
 const SPX_FINFO_VARIANTS = [
-    'ico' => [ 'image/vnd.microsoft.icon', 'image/x-icon' ],
-    'wav' => [ 'audio/x-wav', 'audio/wav' ],
-    'mp3' => [ 'audio/x-mpeg', 'audio/mpeg', 'audio/mp3' ],
+    'ico'  => [ 'image/vnd.microsoft.icon', 'image/x-icon' ],
+    'wav'  => [ 'audio/x-wav', 'audio/wav' ],
+    'mp3'  => [ 'audio/x-mpeg', 'audio/mpeg', 'audio/mp3' ],
+    'weba' => [ 'audio/webm', 'video/webm' ],
+    'webp' => [ 'image/webp' ],
+    'flac' => [ 'audio/flac', 'audio/x-flac' ],
+    'aac'  => [ 'audio/aac', 'audio/x-aac' ],
+    'm4a'  => [ 'audio/mp4', 'audio/x-m4a' ],
+    'ogg'  => [ 'audio/ogg', 'application/ogg' ],
+    'mpeg' => [ 'video/mpeg', 'audio/mpeg' ],
+    'mp4'  => [ 'video/mp4', 'application/mp4' ],
+    'vcf' => [ 'text/vcard', 'text/x-vcard' ],
 ];
 
 /**
