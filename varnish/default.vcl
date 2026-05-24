@@ -14,10 +14,6 @@ import std;
 # -----------------------------------------------------------------------------
 # Backends
 # -----------------------------------------------------------------------------
-acl localhost {
-    "127.0.0.1";
-    "::1";
-}
 # Apache + WordPress — primary backend for all cacheable/pass traffic.
 backend apache {
     .host = "127.0.0.1";
