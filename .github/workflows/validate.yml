@@ -37,7 +37,7 @@ jobs:
           sudo apt-get install -y wget ca-certificates
           sudo mkdir -p /var/lib/GeoIP
           # CI uses MaxMind's public test database (no license key required).
-          wget -q -O /var/lib/GeoIP/GeoLite2-Country.mmdb \
+          sudo wget -q -O /var/lib/GeoIP/GeoLite2-Country.mmdb \
             "https://github.com/maxmind/MaxMind-DB/raw/main/test-data/GeoLite2-Country-Test.mmdb"
           # Fail fast if the download did not produce a non-empty MMDB.
           test -s /var/lib/GeoIP/GeoLite2-Country.mmdb
@@ -45,7 +45,7 @@ jobs:
       - name: Install stub TLS certificates
         # nginx -t checks that ssl_certificate paths exist even in test mode.
         run: |
-          sudo mkdir -p /etc/ssl/certs /etc/ssl/private
+          sudo mkdir -p /etc/ssl/certs /etc/ssl/private /etc/ssl/cloudflare
           for domain in sparxstar.com aiwestafrica.com barbarabarrett.org cellularvibrations.com casanovaandrosetta.com; do
             sudo openssl req -x509 -nodes -days 1 -newkey ec -pkeyopt ec_paramgen_curve:P-256 \
               -keyout /etc/ssl/private/${domain}.key \
@@ -54,6 +54,8 @@ jobs:
           done
           # sparxstar.com also references sparxstar_ecc.key
           sudo cp /etc/ssl/private/sparxstar.com.key /etc/ssl/private/sparxstar_ecc.key
+          # ssl_trusted_certificate must point at a readable PEM in test mode.
+          sudo cp /etc/ssl/certs/sparxstar.com.pem /etc/ssl/cloudflare/origin_ca_ecc_root.pem
 
       - name: Install Nginx conf.d and sites
         run: |
@@ -61,6 +63,7 @@ jobs:
                         /etc/nginx/snippets /etc/nginx/secrets
           sudo cp nginx/conf.d/*.conf     /etc/nginx/conf.d/
           sudo cp nginx/sites-available/* /etc/nginx/sites-available/
+          sudo rm -f /etc/nginx/sites-enabled/default
           sudo ln -sf /etc/nginx/sites-available/system-core.conf \
                       /etc/nginx/sites-enabled/system-core.conf
           sudo cp nginx/snippets/*.conf   /etc/nginx/snippets/
