@@ -454,20 +454,9 @@ sub vcl_backend_response {
 }
 
 # =============================================================================
-# vcl_deliver — add diagnostic headers and clean up
+# vcl_deliver — clean up response headers
 # =============================================================================
 sub vcl_deliver {
-    # Only expose cache diagnostics to trusted internal requests.
-    if (req.http.X-Internal-Debug == "1" && std.ip(req.http.X-Real-IP, client.ip) ~ localhost) {
-        if (obj.hits > 0) {
-            set resp.http.X-Cache = "HIT";
-            set resp.http.X-Cache-Hits = obj.hits;
-        } else {
-            set resp.http.X-Cache = "MISS";
-        }
-    }
-
-    # Remove internal Varnish headers before delivering to Nginx/client.
     unset resp.http.X-Varnish;
     unset resp.http.Via;
 
