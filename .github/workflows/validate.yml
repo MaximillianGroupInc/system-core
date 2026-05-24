@@ -67,10 +67,17 @@ jobs:
 
       - name: Install Nginx modules (GeoIP2 + Brotli)
         run: |
-          sudo apt-get install -y libnginx-mod-http-geoip2 || true
-          # Brotli may not be available on all Ubuntu runner versions.
-          sudo apt-get install -y libnginx-mod-http-brotli || true
+          sudo apt-get update -qq
+          sudo apt-get install -y libnginx-mod-http-geoip2
+          sudo apt-get install -y libnginx-mod-http-brotli-filter libnginx-mod-http-brotli-static
 
+          # nginx/nginx.conf explicitly load_module's these; remove any distro-enabled
+          # module snippets to avoid "module is already loaded" errors.
+          sudo rm -f /etc/nginx/modules-enabled/*geoip2* /etc/nginx/modules-enabled/*brotli*
+
+          test -f /usr/lib/nginx/modules/ngx_http_geoip2_module.so
+          test -f /usr/lib/nginx/modules/ngx_http_brotli_filter_module.so
+          test -f /usr/lib/nginx/modules/ngx_http_brotli_static_module.so
       - name: Nginx syntax test
         run: |
           sudo nginx -t -c ${{ github.workspace }}/nginx/nginx.conf
