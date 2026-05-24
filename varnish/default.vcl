@@ -14,7 +14,10 @@ import std;
 # -----------------------------------------------------------------------------
 # Backends
 # -----------------------------------------------------------------------------
-
+acl localhost {
+    "127.0.0.1";
+    "::1";
+}
 # Apache + WordPress — primary backend for all cacheable/pass traffic.
 backend apache {
     .host = "127.0.0.1";
@@ -455,7 +458,7 @@ sub vcl_backend_response {
 # =============================================================================
 sub vcl_deliver {
     # Only expose cache diagnostics to trusted internal requests.
-    if (req.http.X-Internal-Debug == "1" && client.ip == 127.0.0.1) {
+    if (req.http.X-Internal-Debug == "1" && client.ip ~ localhost) {
         if (obj.hits > 0) {
             set resp.http.X-Cache = "HIT";
             set resp.http.X-Cache-Hits = obj.hits;
