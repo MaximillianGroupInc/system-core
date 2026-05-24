@@ -8,7 +8,7 @@ body:
         Use this template for confirmed bugs or misconfigurations in Nginx,
         Varnish, Apache, or the WordPress MU plugins. For security issues,
         use the **private vulnerability reporting** channel instead
-        (see [SECURITY.md](../SECURITY.md)).
+        (see https://github.com/MaximillianGroupInc/system-core/security/policy).
 
   - type: dropdown
     id: component
