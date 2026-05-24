@@ -195,7 +195,7 @@ The active config ships with `max-age=31536000; includeSubDomains; preload`.
 All hosted domains are confirmed HTTPS-only via Cloudflare.
 
 `includeSubDomains` is enabled — every subdomain served from this origin must
-have a valid TLS certificate and must redirect HTTP → HTTPS.  Do not add a
+have a valid TLS certificate and must redirect HTTP → HTTPS. Do not add a
 new subdomain to `nginx/conf.d/spx-certs-logic.conf` unless it meets this
 requirement.
 
