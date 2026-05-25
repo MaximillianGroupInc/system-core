@@ -51,8 +51,8 @@ Key security controls in this stack and where they live:
 
 | Control | Location |
 |---------|----------|
-| Cloudflare-only origin gate | `nginx/nginx.conf` — `geo $from_cloudflare` |
-| Worker-to-Origin secret gate | `nginx/nginx.conf` — `map $http_x_worker_origin_secret` |
+| Cloudflare-only origin gate | `nginx/nginx.conf` — `geo $realip_remote_addr $spx_from_cloudflare` |
+| Worker-to-Origin secret gate | `nginx/nginx.conf` — `map $http_x_worker_origin_secret $spx_is_trusted_worker` |
 | Real IP restoration | `nginx/conf.d/spx-cloudflare-trust.conf` |
 | Bot/UA mitigation | `nginx/conf.d/spx-bot-mitigation-logic.conf` |
 | CSP policy | `nginx/conf.d/spx-csp-logic.conf` |
