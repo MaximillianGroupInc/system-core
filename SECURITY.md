@@ -51,12 +51,12 @@ Key security controls in this stack and where they live:
 
 | Control | Location |
 |---------|----------|
-| Cloudflare-only origin gate | `nginx/nginx.conf` — `geo $from_cloudflare` |
-| Worker-to-Origin secret gate | `nginx/nginx.conf` — `map $http_x_worker_origin_secret` |
+| Cloudflare-only origin gate | `nginx/nginx.conf` — `geo $realip_remote_addr $spx_from_cloudflare` |
+| Worker-to-Origin secret gate | `nginx/nginx.conf` — `map $http_x_worker_origin_secret $spx_is_trusted_worker` |
 | Real IP restoration | `nginx/conf.d/spx-cloudflare-trust.conf` |
 | Bot/UA mitigation | `nginx/conf.d/spx-bot-mitigation-logic.conf` |
 | CSP policy | `nginx/conf.d/spx-csp-logic.conf` |
-| CORS credentials allowlist | `nginx/conf.d/spx-cors-trusted-origins.conf` |
+| CORS credentials allowlist | `nginx/maps/spx-cors-trusted-origins.conf` |
 | TLS certificate mapping | `nginx/conf.d/spx-certs-logic.conf` |
 | Rate limiting zones | `nginx/nginx.conf` — `limit_req_zone` blocks |
 | Upload MIME validation | `var/www/html/wp-content/mu-plugins/spx-upload-mimes.php` |
