@@ -102,7 +102,7 @@ jobs:
 
       - name: VCL syntax check
         run: |
-          sudo varnishd -C -f ${{ github.workspace }}/varnish/default.vcl
+          varnishd -C -f ${{ github.workspace }}/varnish/default.vcl
 
   apache:
     name: Apache syntax check
