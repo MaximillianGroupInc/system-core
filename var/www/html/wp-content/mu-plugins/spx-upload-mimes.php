@@ -56,7 +56,7 @@ const SPX_EXTRA_MIMES = [
     'ogg'  => 'audio/ogg',
     'mpeg' => 'video/mpeg',
     'mp4'  => 'video/mp4',
-    'vcf' => 'text/vcard',
+    'vcf'  => 'text/vcard',
 ];
 
 /**
@@ -80,7 +80,7 @@ const SPX_FINFO_VARIANTS = [
     'ogg'  => [ 'audio/ogg', 'application/ogg' ],
     'mpeg' => [ 'video/mpeg', 'audio/mpeg' ],
     'mp4'  => [ 'video/mp4', 'application/mp4' ],
-    'vcf' => [ 'text/vcard', 'text/x-vcard' ],
+    'vcf'  => [ 'text/vcard', 'text/x-vcard' ],
 ];
 
 /**
