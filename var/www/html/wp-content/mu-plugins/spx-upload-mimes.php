@@ -23,8 +23,8 @@ declare(strict_types=1);
  *   1. upload_mimes              – adds ICO to the extension → MIME map so
  *                                  WordPress does not reject it before even
  *                                  reaching the fileinfo check.
- *   2. wp_check_filetype_and_ext – overrides the fileinfo verdict for the
- *                                  three extensions so that a MIME mismatch
+ *   2. wp_check_filetype_and_ext – overrides the fileinfo verdict for these
+ *                                  managed extensions so that a MIME mismatch
  *                                  between libmagic and the WordPress map
  *                                  does not veto the upload.
  *
