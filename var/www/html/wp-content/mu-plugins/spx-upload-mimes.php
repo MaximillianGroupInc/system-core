@@ -17,7 +17,7 @@ declare(strict_types=1);
  *   • WAV  → audio/x-wav  (WordPress expects audio/wav)
  *   • MP3  → audio/x-mpeg (WordPress expects audio/mpeg)
  *   • ICO  → not in default allowlist at all
- *   * WEBA, M4A, ACC, FLAC, VCARD, MPEG, MP4 - as well.
+ *   * WEBA, M4A, AAC, FLAC, VCARD, MPEG, MP4 - as well.
  *
  * Both hooks below are required:
  *   1. upload_mimes              – adds ICO to the extension → MIME map so
@@ -34,7 +34,7 @@ declare(strict_types=1);
  * ingestion and must NOT be used for Media Library uploads.
  */
 
-defined( 'ABSPATH' ) || exit;
+\defined( 'ABSPATH' ) || exit;
 
 /**
  * Canonical extension → MIME map for the three types this plugin unlocks.
@@ -84,9 +84,9 @@ const SPX_FINFO_VARIANTS = [
 ];
 
 /**
- * Add ICO to the allowed upload MIME types.
- * WAV and MP3 are already present in WordPress's default list; they are
- * included here to make the mapping explicit and consistent.
+ * Add all managed extensions to the allowed upload MIME types.
+ * Some are already in WordPress defaults; the full map is applied here to keep
+ * extension-to-MIME values explicit and consistent.
  *
  * @param array $mimes Existing extension => MIME map.
  * @return array
@@ -99,7 +99,7 @@ add_filter( 'upload_mimes', static function ( array $mimes ): array {
 } );
 
 /**
- * Override fileinfo/libmagic MIME detection for ICO, WAV, and MP3.
+ * Override fileinfo/libmagic MIME detection for the managed extensions.
  *
  * PHP's fileinfo extension (libmagic) returns non-canonical MIME strings for
  * these formats on Ubuntu 22/24 with PHP 8.2/8.3:
@@ -109,7 +109,7 @@ add_filter( 'upload_mimes', static function ( array $mimes ): array {
  * WordPress's wp_check_filetype_and_ext() compares the detected MIME against
  * the upload_mimes map and blocks the upload if they differ.  This filter
  * supplies the canonical MIME string when:
- *   a) the extension is one of the three managed types, AND
+ *   a) the extension is one of the managed types, AND
  *   b) the default check did not already resolve the type cleanly, AND
  *   c) finfo independently confirms the file contents are a genuine instance
  *      of that type (i.e. the detected MIME is in SPX_FINFO_VARIANTS).
