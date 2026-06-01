@@ -3,178 +3,198 @@ declare(strict_types=1);
 
 /**
  * Plugin Name: SPX Upload MIME Types
- * Description: Extends the WordPress Media Library to allow ICO (favicon),
- *              WAV, and MP3 file uploads.  Installed as a must-use plugin so
- *              the allowlist is always active regardless of active plugins.
+ * Description: Extends the WordPress Media Library allowlist to permit a fixed
+ *              set of audio, image, video, and vCard file types, and reconciles
+ *              the non-canonical MIME strings that libmagic returns for several
+ *              of them on Ubuntu 22/24 with PHP 8.2/8.3. Installed as a
+ *              must-use plugin so the allowlist is always active regardless of
+ *              which regular plugins are enabled.
  *
  * Background
  * ----------
- * WordPress deliberately omits ICO from its default upload_mimes list (legacy
- * IE security policy) and relies on PHP's fileinfo/libmagic extension to
- * verify that the detected MIME type matches the declared extension.  On
- * Ubuntu 22/24 with PHP 8.2/8.3, libmagic frequently returns:
+ * WordPress verifies that an upload's declared extension matches the MIME type
+ * that PHP's fileinfo/libmagic extension detects from the file contents. Two
+ * problems break legitimate uploads:
  *
- *   • WAV  → audio/x-wav  (WordPress expects audio/wav)
- *   • MP3  → audio/x-mpeg (WordPress expects audio/mpeg)
- *   • ICO  → not in default allowlist at all
- *   * WEBA, M4A, ACC, FLAC, VCARD, MPEG, MP4 - as well.
+ *   1. Some extensions (e.g. ICO) are deliberately absent from WordPress's
+ *      default upload_mimes allowlist, so the upload is rejected before the
+ *      content check even runs.
  *
- * Both hooks below are required:
- *   1. upload_mimes              – adds ICO to the extension → MIME map so
- *                                  WordPress does not reject it before even
- *                                  reaching the fileinfo check.
- *   2. wp_check_filetype_and_ext – overrides the fileinfo verdict for the
- *                                  three extensions so that a MIME mismatch
- *                                  between libmagic and the WordPress map
- *                                  does not veto the upload.
+ *   2. libmagic returns non-canonical MIME strings for several formats
+ *      (e.g. WAV -> audio/x-wav where WordPress expects audio/wav,
+ *      MP3 -> audio/x-mpeg where WordPress expects audio/mpeg), causing a
+ *      mismatch that vetoes an otherwise valid upload.
  *
- * Standard WordPress Media Library uploads (via /wp-admin/async-upload.php
- * or /wp-json/wp/v2/media) are used for these file types.  The TUS resumable
- * upload endpoint (/files/) is reserved exclusively for Submission Core audio
- * ingestion and must NOT be used for Media Library uploads.
+ * Two hooks address these in order:
+ *   - upload_mimes              adds the managed extensions to the allowlist.
+ *   - wp_check_filetype_and_ext supplies the canonical MIME string when the
+ *                               default check fails AND fileinfo independently
+ *                               confirms the contents are a genuine instance of
+ *                               the type (fail-secure: a foreign file merely
+ *                               renamed to a managed extension is still
+ *                               rejected).
+ *
+ * Standard Media Library uploads (/wp-admin/async-upload.php or
+ * /wp-json/wp/v2/media) are used for these types. The TUS resumable endpoint
+ * (/files/) is reserved exclusively for Submission Core audio ingestion and
+ * must NOT be used for Media Library uploads.
+ *
+ * NOTE: Adjust the namespace below to match the platform standards repo's
+ * canonical root namespace before committing.
  */
 
-defined( 'ABSPATH' ) || exit;
+namespace Starisian\Sparxstar\MimeTypes;
+
+\defined( 'ABSPATH' ) || exit;
 
 /**
- * Canonical extension → MIME map for the three types this plugin unlocks.
+ * Registers and implements the Media Library MIME allowlist extensions.
  *
- * Single source of truth used by both the upload_mimes allowlist filter and
- * the wp_check_filetype_and_ext fileinfo-override filter below.
- *
- * @var array<string, string>
+ * All behaviour is stateless, so the hook callbacks are exposed as static
+ * methods. Naming them (rather than using anonymous closures) means any fatal
+ * raised inside them is attributed to this class in the stack trace instead of
+ * the opaque "{closure}".
  */
-const SPX_EXTRA_MIMES = [
-    'ico'  => 'image/x-icon',
-    'wav'  => 'audio/wav',
-    'mp3'  => 'audio/mpeg',
-    'weba' => 'audio/webm',
-    'webp' => 'image/webp',
-    'flac' => 'audio/flac',
-    'aac'  => 'audio/aac',
-    'm4a'  => 'audio/mp4',
-    'ogg'  => 'audio/ogg',
-    'mpeg' => 'video/mpeg',
-    'mp4'  => 'video/mp4',
-    'vcf' => 'text/vcard',
-];
+final class UploadMimeTypes {
 
-/**
- * MIME strings that PHP's finfo/libmagic may legitimately return for genuine
- * files of each extension.  The override in wp_check_filetype_and_ext is only
- * applied when the detected MIME is one of these known-good variants, ensuring
- * that a non-audio/non-ICO file renamed to one of these extensions is still
- * rejected by WordPress's file-content validation.
- *
- * @var array<string, list<string>>
- */
-const SPX_FINFO_VARIANTS = [
-    'ico'  => [ 'image/vnd.microsoft.icon', 'image/x-icon' ],
-    'wav'  => [ 'audio/x-wav', 'audio/wav' ],
-    'mp3'  => [ 'audio/x-mpeg', 'audio/mpeg', 'audio/mp3' ],
-    'weba' => [ 'audio/webm', 'video/webm' ],
-    'webp' => [ 'image/webp' ],
-    'flac' => [ 'audio/flac', 'audio/x-flac' ],
-    'aac'  => [ 'audio/aac', 'audio/x-aac' ],
-    'm4a'  => [ 'audio/mp4', 'audio/x-m4a' ],
-    'ogg'  => [ 'audio/ogg', 'application/ogg' ],
-    'mpeg' => [ 'video/mpeg', 'audio/mpeg' ],
-    'mp4'  => [ 'video/mp4', 'application/mp4' ],
-    'vcf' => [ 'text/vcard', 'text/x-vcard' ],
-];
+    /**
+     * Canonical extension => MIME map for every type this plugin unlocks.
+     *
+     * Single source of truth shared by both the upload_mimes allowlist filter
+     * and the wp_check_filetype_and_ext fileinfo-override filter.
+     *
+     * @var array<string, string>
+     */
+    private const EXTRA_MIMES = [
+        'ico'  => 'image/x-icon',
+        'wav'  => 'audio/wav',
+        'mp3'  => 'audio/mpeg',
+        'weba' => 'audio/webm',
+        'webp' => 'image/webp',
+        'flac' => 'audio/flac',
+        'aac'  => 'audio/aac',
+        'm4a'  => 'audio/mp4',
+        'ogg'  => 'audio/ogg',
+        'mpeg' => 'video/mpeg',
+        'mp4'  => 'video/mp4',
+        'vcf'  => 'text/vcard',
+    ];
 
-/**
- * Add ICO to the allowed upload MIME types.
- * WAV and MP3 are already present in WordPress's default list; they are
- * included here to make the mapping explicit and consistent.
- *
- * @param array $mimes Existing extension => MIME map.
- * @return array
- */
-add_filter( 'upload_mimes', static function ( array $mimes ): array {
-    foreach ( SPX_EXTRA_MIMES as $ext => $mime ) {
-        $mimes[ $ext ] = $mime;
+    /**
+     * MIME strings that fileinfo/libmagic may legitimately return for genuine
+     * files of each managed extension. The override is applied only when the
+     * detected MIME is one of these known-good variants, so a foreign file
+     * renamed to a managed extension is still rejected by content validation.
+     *
+     * @var array<string, list<string>>
+     */
+    private const FINFO_VARIANTS = [
+        'ico'  => [ 'image/vnd.microsoft.icon', 'image/x-icon' ],
+        'wav'  => [ 'audio/x-wav', 'audio/wav' ],
+        'mp3'  => [ 'audio/x-mpeg', 'audio/mpeg', 'audio/mp3' ],
+        'weba' => [ 'audio/webm', 'video/webm' ],
+        'webp' => [ 'image/webp' ],
+        'flac' => [ 'audio/flac', 'audio/x-flac' ],
+        'aac'  => [ 'audio/aac', 'audio/x-aac' ],
+        'm4a'  => [ 'audio/mp4', 'audio/x-m4a' ],
+        'ogg'  => [ 'audio/ogg', 'application/ogg' ],
+        'mpeg' => [ 'video/mpeg', 'audio/mpeg' ],
+        'mp4'  => [ 'video/mp4', 'application/mp4' ],
+        'vcf'  => [ 'text/vcard', 'text/x-vcard' ],
+    ];
+
+    /**
+     * Wire up the filters. Called once when this file loads.
+     */
+    public static function register(): void {
+        \add_filter( 'upload_mimes', [ self::class, 'allowExtraMimes' ] );
+        \add_filter( 'wp_check_filetype_and_ext', [ self::class, 'overrideFiletypeCheck' ], 10, 4 );
     }
-    return $mimes;
-} );
 
-/**
- * Override fileinfo/libmagic MIME detection for ICO, WAV, and MP3.
- *
- * PHP's fileinfo extension (libmagic) returns non-canonical MIME strings for
- * these formats on Ubuntu 22/24 with PHP 8.2/8.3:
- *   WAV → audio/x-wav  instead of audio/wav
- *   MP3 → audio/x-mpeg instead of audio/mpeg
- *
- * WordPress's wp_check_filetype_and_ext() compares the detected MIME against
- * the upload_mimes map and blocks the upload if they differ.  This filter
- * supplies the canonical MIME string when:
- *   a) the extension is one of the three managed types, AND
- *   b) the default check did not already resolve the type cleanly, AND
- *   c) finfo independently confirms the file contents are a genuine instance
- *      of that type (i.e. the detected MIME is in SPX_FINFO_VARIANTS).
- *
- * Condition (c) prevents a file with unrelated contents that has simply been
- * renamed to .ico/.wav/.mp3 from bypassing WordPress's file-content
- * validation — only known libmagic variants for each format are accepted.
- *
- * @param array       $data     {ext, type, proper_filename} from the default check.
- * @param string      $file     Full path to the temporary upload file.
- * @param string      $filename Original filename supplied by the client.
- * @param array       $mimes    Allowed MIME map passed to the check.
- * @return array
- */
-add_filter( 'wp_check_filetype_and_ext', static function (
-    array $data,
-    string $file,
-    string $filename,
-    array $mimes
-): array {
-    $ext = strtolower( (string) pathinfo( $filename, PATHINFO_EXTENSION ) );
+    /**
+     * Add the managed extensions to the upload allowlist.
+     *
+     * Core always passes an array here (the result of wp_get_mime_types()),
+     * so the non-nullable array hint is safe for this hook.
+     *
+     * @param array<string, string> $mimes Existing extension => MIME map.
+     * @return array<string, string>
+     */
+    public static function allowExtraMimes( array $mimes ): array {
+        foreach ( self::EXTRA_MIMES as $ext => $mime ) {
+            $mimes[ $ext ] = $mime;
+        }
 
-    if ( ! isset( SPX_EXTRA_MIMES[ $ext ] ) ) {
+        return $mimes;
+    }
+
+    /**
+     * Override the fileinfo verdict for managed extensions when, and only when,
+     * the file contents independently verify as a genuine instance of the type.
+     *
+     * The $mimes parameter is nullable because core declares it with a null
+     * default (wp_check_filetype_and_ext( $file, $filename, $mimes = null, ... ))
+     * and passes that null straight through on the REST media path. A
+     * non-nullable array hint here is a latent fatal that takes down every
+     * upload, not just the managed types.
+     *
+     * @param array{ext: string|false, type: string|false, proper_filename: string|false} $data
+     * @param string                     $file     Absolute path to the temp upload.
+     * @param string                     $filename Original client filename.
+     * @param array<string, string>|null $mimes    Allowed MIME map, or null.
+     * @return array{ext: string|false, type: string|false, proper_filename: string|false}
+     */
+    public static function overrideFiletypeCheck(
+        array $data,
+        string $file,
+        string $filename,
+        ?array $mimes = null
+    ): array {
+        $ext = \strtolower( (string) \pathinfo( $filename, \PATHINFO_EXTENSION ) );
+
+        // Not a managed extension: leave the default verdict untouched.
+        if ( ! isset( self::EXTRA_MIMES[ $ext ] ) ) {
+            return $data;
+        }
+
+        // Default check already resolved cleanly: nothing to override.
+        if ( ! empty( $data['ext'] ) && ! empty( $data['type'] ) ) {
+            return $data;
+        }
+
+        // Fail secure: without fileinfo we cannot verify contents, so leave
+        // the default rejection in place rather than override blindly.
+        if ( ! \function_exists( 'finfo_open' ) ) {
+            return $data;
+        }
+
+        $finfo = \finfo_open( \FILEINFO_MIME_TYPE );
+        if ( false === $finfo ) {
+            return $data;
+        }
+
+        try {
+            $detected = \finfo_file( $finfo, $file );
+        } finally {
+            \finfo_close( $finfo );
+        }
+
+        // Defensive: no known variant table for this extension.
+        if ( ! isset( self::FINFO_VARIANTS[ $ext ] ) ) {
+            return $data;
+        }
+
+        // Detected MIME must be a known-good variant for this extension,
+        // otherwise the file is a foreign type wearing a managed extension.
+        if ( false === $detected || ! \in_array( $detected, self::FINFO_VARIANTS[ $ext ], true ) ) {
+            return $data;
+        }
+
+        $data['ext']  = $ext;
+        $data['type'] = self::EXTRA_MIMES[ $ext ];
+
         return $data;
     }
+}
 
-    // If the default check already resolved cleanly, nothing to do.
-    if ( ! empty( $data['ext'] ) && ! empty( $data['type'] ) ) {
-        return $data;
-    }
-
-    // Use finfo to inspect the actual file contents before overriding.
-    // Only proceed when the detected MIME is one of the known legitimate
-    // variants for this extension (e.g. audio/x-wav for .wav), so that a
-    // non-matching file renamed to .wav/.mp3/.ico is still rejected.
-    // Fail secure: if finfo is unavailable or fails to open, leave the
-    // default rejection in place rather than overriding without validation.
-    if ( ! function_exists( 'finfo_open' ) ) {
-        return $data;
-    }
-
-    $finfo = finfo_open( FILEINFO_MIME_TYPE );
-    if ( false === $finfo ) {
-        return $data;
-    }
-
-    try {
-        $detected = finfo_file( $finfo, $file );
-    } finally {
-        finfo_close( $finfo );
-    }
-
-    if ( ! isset( SPX_FINFO_VARIANTS[ $ext ] ) ) {
-        return $data;
-    }
-
-    $acceptable = SPX_FINFO_VARIANTS[ $ext ];
-    if ( false === $detected || ! in_array( $detected, $acceptable, true ) ) {
-        // File contents do not match any known variant; leave the
-        // default rejection in place.
-        return $data;
-    }
-
-    $data['ext']  = $ext;
-    $data['type'] = SPX_EXTRA_MIMES[ $ext ];
-
-    return $data;
-}, 10, 4 );
+UploadMimeTypes::register();
