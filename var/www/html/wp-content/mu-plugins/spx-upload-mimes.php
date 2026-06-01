@@ -3,9 +3,9 @@ declare(strict_types=1);
 
 /**
  * Plugin Name: SPX Upload MIME Types
- * Description: Extends the WordPress Media Library to allow ICO (favicon),
- *              WAV, and MP3 file uploads.  Installed as a must-use plugin so
- *              the allowlist is always active regardless of active plugins.
+ * Description: Extends the WordPress Media Library allowlist for a managed
+ *              set of audio, image, video, and vCard file types. Installed as
+ *              a must-use plugin so it stays active regardless of plugins.
  *
  * Background
  * ----------
@@ -17,7 +17,7 @@ declare(strict_types=1);
  *   • WAV  → audio/x-wav  (WordPress expects audio/wav)
  *   • MP3  → audio/x-mpeg (WordPress expects audio/mpeg)
  *   • ICO  → not in default allowlist at all
- *   * WEBA, M4A, AAC, FLAC, VCARD, MPEG, MP4 - as well.
+ *   * WEBA, M4A, AAC, FLAC, VCF, MPEG, MP4 - as well.
  *
  * Both hooks below are required:
  *   1. upload_mimes              – adds ICO to the extension → MIME map so
@@ -37,7 +37,7 @@ declare(strict_types=1);
 \defined( 'ABSPATH' ) || exit;
 
 /**
- * Canonical extension → MIME map for the three types this plugin unlocks.
+ * Canonical extension → MIME map for the managed file types this plugin unlocks.
  *
  * Single source of truth used by both the upload_mimes allowlist filter and
  * the wp_check_filetype_and_ext fileinfo-override filter below.
