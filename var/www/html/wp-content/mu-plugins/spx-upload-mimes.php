@@ -37,7 +37,7 @@ declare(strict_types=1);
 \defined( 'ABSPATH' ) || exit;
 
 /**
- * Canonical extension → MIME map for the managed file types this plugin unlocks.
+ * Canonical extension-to-MIME map for the managed file types this plugin unlocks.
  *
  * Single source of truth used by both the upload_mimes allowlist filter and
  * the wp_check_filetype_and_ext fileinfo-override filter below.
