@@ -3,9 +3,9 @@ declare(strict_types=1);
 
 /**
  * Plugin Name: SPX Upload MIME Types
- * Description: Extends the WordPress Media Library to allow ICO (favicon),
- *              WAV, and MP3 file uploads.  Installed as a must-use plugin so
- *              the allowlist is always active regardless of active plugins.
+ * Description: Extends the WordPress Media Library allowlist for a managed
+ *              set of audio, image, video, and vCard file types. Installed as
+ *              a must-use plugin so it stays active regardless of plugins.
  *
  * Background
  * ----------
@@ -17,14 +17,14 @@ declare(strict_types=1);
  *   • WAV  → audio/x-wav  (WordPress expects audio/wav)
  *   • MP3  → audio/x-mpeg (WordPress expects audio/mpeg)
  *   • ICO  → not in default allowlist at all
- *   * WEBA, M4A, ACC, FLAC, VCARD, MPEG, MP4 - as well.
+ *   * WEBA, M4A, AAC, FLAC, VCF, MPEG, MP4 - as well.
  *
  * Both hooks below are required:
  *   1. upload_mimes              – adds ICO to the extension → MIME map so
  *                                  WordPress does not reject it before even
  *                                  reaching the fileinfo check.
- *   2. wp_check_filetype_and_ext – overrides the fileinfo verdict for the
- *                                  three extensions so that a MIME mismatch
+ *   2. wp_check_filetype_and_ext – overrides the fileinfo verdict for these
+ *                                  managed extensions so that a MIME mismatch
  *                                  between libmagic and the WordPress map
  *                                  does not veto the upload.
  *
@@ -34,10 +34,10 @@ declare(strict_types=1);
  * ingestion and must NOT be used for Media Library uploads.
  */
 
-defined( 'ABSPATH' ) || exit;
+\defined( 'ABSPATH' ) || exit;
 
 /**
- * Canonical extension → MIME map for the three types this plugin unlocks.
+ * Canonical extension-to-MIME map for the managed file types this plugin unlocks.
  *
  * Single source of truth used by both the upload_mimes allowlist filter and
  * the wp_check_filetype_and_ext fileinfo-override filter below.
@@ -56,7 +56,7 @@ const SPX_EXTRA_MIMES = [
     'ogg'  => 'audio/ogg',
     'mpeg' => 'video/mpeg',
     'mp4'  => 'video/mp4',
-    'vcf' => 'text/vcard',
+    'vcf'  => 'text/vcard',
 ];
 
 /**
@@ -80,13 +80,13 @@ const SPX_FINFO_VARIANTS = [
     'ogg'  => [ 'audio/ogg', 'application/ogg' ],
     'mpeg' => [ 'video/mpeg', 'audio/mpeg' ],
     'mp4'  => [ 'video/mp4', 'application/mp4' ],
-    'vcf' => [ 'text/vcard', 'text/x-vcard' ],
+    'vcf'  => [ 'text/vcard', 'text/x-vcard' ],
 ];
 
 /**
- * Add ICO to the allowed upload MIME types.
- * WAV and MP3 are already present in WordPress's default list; they are
- * included here to make the mapping explicit and consistent.
+ * Add all managed extensions to the allowed upload MIME types.
+ * Some are already in WordPress defaults; the full map is applied here to keep
+ * extension-to-MIME values explicit and consistent.
  *
  * @param array $mimes Existing extension => MIME map.
  * @return array
@@ -99,7 +99,7 @@ add_filter( 'upload_mimes', static function ( array $mimes ): array {
 } );
 
 /**
- * Override fileinfo/libmagic MIME detection for ICO, WAV, and MP3.
+ * Override fileinfo/libmagic MIME detection for the managed extensions.
  *
  * PHP's fileinfo extension (libmagic) returns non-canonical MIME strings for
  * these formats on Ubuntu 22/24 with PHP 8.2/8.3:
@@ -109,7 +109,7 @@ add_filter( 'upload_mimes', static function ( array $mimes ): array {
  * WordPress's wp_check_filetype_and_ext() compares the detected MIME against
  * the upload_mimes map and blocks the upload if they differ.  This filter
  * supplies the canonical MIME string when:
- *   a) the extension is one of the three managed types, AND
+ *   a) the extension is one of the managed types, AND
  *   b) the default check did not already resolve the type cleanly, AND
  *   c) finfo independently confirms the file contents are a genuine instance
  *      of that type (i.e. the detected MIME is in SPX_FINFO_VARIANTS).
@@ -121,14 +121,14 @@ add_filter( 'upload_mimes', static function ( array $mimes ): array {
  * @param array       $data     {ext, type, proper_filename} from the default check.
  * @param string      $file     Full path to the temporary upload file.
  * @param string      $filename Original filename supplied by the client.
- * @param array       $mimes    Allowed MIME map passed to the check.
+ * @param array|null  $mimes    Allowed MIME map passed to the check.
  * @return array
  */
 add_filter( 'wp_check_filetype_and_ext', static function (
     array $data,
     string $file,
     string $filename,
-    array $mimes
+    ?array $mimes = null
 ): array {
     $ext = strtolower( (string) pathinfo( $filename, PATHINFO_EXTENSION ) );
 
