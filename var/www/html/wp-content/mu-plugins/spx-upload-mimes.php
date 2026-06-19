@@ -132,7 +132,7 @@ add_filter( 'wp_check_filetype_and_ext', static function (
 ): array {
     $ext = strtolower( (string) pathinfo( $filename, PATHINFO_EXTENSION ) );
 
-    if ( ! isset( SPX_EXTRA_MIMES[ $ext ] ) ) {
+    if ( ! array_key_exists( $ext, SPX_EXTRA_MIMES ) ) {
         return $data;
     }
 
@@ -156,13 +156,14 @@ add_filter( 'wp_check_filetype_and_ext', static function (
         return $data;
     }
 
+    $detected = false;
     try {
         $detected = finfo_file( $finfo, $file );
     } finally {
         finfo_close( $finfo );
     }
 
-    if ( ! isset( SPX_FINFO_VARIANTS[ $ext ] ) ) {
+    if ( ! array_key_exists( $ext, SPX_FINFO_VARIANTS ) ) {
         return $data;
     }
 
